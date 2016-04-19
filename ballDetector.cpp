@@ -39,7 +39,7 @@ int main(int argc, char** argv)
         //namedWindow("Control", CV_WINDOW_AUTOSIZE); //create a window called "Control"
 
 		int iLowH = 0;
-		int iHighH = 5;
+		int iHighH = 10;
 
 		int iLowS = 0; 
 		int iHighS = 255;
@@ -65,19 +65,31 @@ int main(int argc, char** argv)
 
 			cvtColor(frame, frameHSV, COLOR_BGR2HSV); // Convert the captured frame from BGR to HSV
 
-			Mat imgThresholded;
+			Mat mask, mask1, mask2;
 
-			inRange(frameHSV, Scalar(iLowH, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), imgThresholded); // Threshold the image
+			inRange(frameHSV, Scalar(0, iLowS, iLowV), Scalar(10, iHighS, iHighV), mask1);    // Threshold the image
+			inRange(frameHSV, Scalar(170, iLowS, iLowV), Scalar(180, iHighS, iHighV), mask2); // Threshold the image
 			  
 			// morphological opening (remove small objects from the foreground)
-			erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
-			dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
+			erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+			dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
+		
+			erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+			dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
 
 			// morphological closing (fill small holes in the foreground)
-			dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
-			erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+			dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
+			erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
 
-			imshow("Thresholded Image", imgThresholded); //show the thresholded image
+			dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
+			erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+
+			mask = mask1 + mask2;
+
+			Mat frameFiltered;
+			frame.copyTo( frameFiltered, mask );
+
+			imshow("Filtered Image", frameFiltered); //show the thresholded image
 
 		    if(waitKey(30) >= 0) break;
 		}
