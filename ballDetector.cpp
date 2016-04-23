@@ -39,25 +39,14 @@ int main(int argc, char** argv)
         //namedWindow("Control", CV_WINDOW_AUTOSIZE); //create a window called "Control"
 
 		int iLowH = 0;
-		int iHighH = 10;
+		int iHighH = 25;
 
 		int iLowS = 0; 
 		int iHighS = 255;
 
 		int iLowV = 0;
 		int iHighV = 128;
-		/*
-		//Create trackbars in "Control" window
-		cvCreateTrackbar("LowH", "Control", &iLowH, 179); //Hue (0 - 179)
-		cvCreateTrackbar("HighH", "Control", &iHighH, 179);
 
-		cvCreateTrackbar("LowS", "Control", &iLowS, 255); //Saturation (0 - 255)
-		cvCreateTrackbar("HighS", "Control", &iHighS, 255);
-
-		cvCreateTrackbar("LowV", "Control", &iLowV, 255); //Value (0 - 255)
-		cvCreateTrackbar("HighV", "Control", &iHighV, 255);
-		*/
-	        
 		for(int i=0; i < inputVideo.get(CAP_PROP_FRAME_COUNT); ++i)
 		{
 		    Mat frame, frameHSV, frameGray;
@@ -65,57 +54,72 @@ int main(int argc, char** argv)
 
 			cvtColor(frame, frameHSV, COLOR_BGR2HSV); // Convert the captured frame from BGR to HSV
 
-			Mat mask, mask1, mask2;
+			Mat mask1;
 
-			inRange(frameHSV, Scalar(0, iLowS, iLowV), Scalar(25, iHighS, iHighV), mask1);      // Threshold the image
-			//inRange(frameHSV, Scalar(170, iLowS, iLowV), Scalar(180, iHighS, iHighV), mask2); // Threshold the image
-			  
+			inRange(frameHSV, Scalar(iLowH, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), mask1);   // Threshold the image
+
 			// morphological opening (remove small objects from the foreground)
 			erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
 			dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
-		
-			//erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
-			//dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
 
 			// morphological closing (fill small holes in the foreground)
 			dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
 			erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
 
-			//dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
-			//erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
-
-			mask = mask1 + mask2;
-
 			Mat frameFiltered;
-			frame.copyTo( frameFiltered, mask );
+			frame.copyTo( frameFiltered, mask1 );
 			
-			if(i == 10) 
+			/*if(i == 10) 
 			{			
 				vector<int> compression_params;
 				compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
 				compression_params.push_back(9);
 				imwrite("test.png", frame, compression_params);
+			}*/
+
+		    vector<vector<cv::Point> > contours;
+		    cv::findContours(mask1, contours, CV_RETR_EXTERNAL,
+                         CV_CHAIN_APPROX_NONE);						
+
+		    // >>>>> Filtering
+		    vector<vector<cv::Point> > balls;
+		    vector<cv::Rect> ballsBox;
+		    for (size_t i = 0; i < contours.size(); i++)
+		    {
+		        cv::Rect bBox;
+		        bBox = cv::boundingRect(contours[i]);
+		        
+		        float ratio = (float) bBox.width / (float) bBox.height;
+		        if (ratio > 1.0f)
+		            ratio = 1.0f / ratio;
+		        
+		        // Searching for a bBox almost square
+		        if (ratio > 0.75 && bBox.area() >= 400)
+		        {
+		            balls.push_back(contours[i]);
+		            ballsBox.push_back(bBox);
+		        }
+		    }
+		    
+			Mat result = frameFiltered;
+			for (size_t i = 0; i < balls.size(); i++)
+			{
+				cv::drawContours(result, balls, i, CV_RGB(20,150,20), 1);
+				cv::rectangle(result, ballsBox[i], CV_RGB(0,255,0), 2);
+		
+				cv::Point center;
+				center.x = ballsBox[i].x + ballsBox[i].width / 2;
+				center.y = ballsBox[i].y + ballsBox[i].height / 2;
+				cv::circle(result, center, 2, CV_RGB(20,150,20), -1);
+		
+				stringstream sstr;
+				sstr << "(" << center.x << "," << center.y << ")";
+				cv::putText(result, sstr.str(),
+						    cv::Point(center.x + 3, center.y - 3),
+						    cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(20,150,20), 2);
 			}
-			
-			/* TODO Other Transform */
-			/*Mat detectedEdge;
-			/// Convert the image to grayscale
-			cvtColor( frame, frameGray, CV_BGR2GRAY );
-			/// Reduce noise with a kernel 3x3
-			blur( frameGray, detectedEdge, Size(3,3) );
 
-			/// Canny detector
-			int minTh = 50;
-			int kernel_size = 3;
-			Canny( detectedEdge, detectedEdge, minTh, minTh*2, kernel_size );
-			*/
-			/// Using Canny's output as a mask, we display our result
-			//dst = Scalar::all(0);
-
-			//src.copyTo( dst, detected_edges);
-			//imshow( window_name, dst );
-			
-			imshow("Filtered Image", frameFiltered); //show the thresholded image
+			imshow("Filtered Image", result); //show the thresholded image
 
 		    if(waitKey(30) >= 0) break;
 		}
