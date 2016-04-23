@@ -9,6 +9,16 @@
 using namespace std;
 using namespace cv;
 
+void CallBackFunc(int event, int x, int y, int flags, void* userdata)
+{
+	if  ( event == EVENT_LBUTTONDOWN )
+	{
+		Mat* img = (Mat*)userdata;  // 1st cast it back, then deref
+		cout << "Left button of the mouse is clicked - position (" << x << ", " << y << ")" << endl;
+		cout << img->at<Vec3b>( Point(x, y) ) << endl;
+	}
+}
+
 int main(int argc, char** argv)
 {
 	if(argc >= 3)
@@ -35,111 +45,110 @@ int main(int argc, char** argv)
             return -1;
         }
         
-        //namedWindow("Basketball", CV_WINDOW_AUTOSIZE);
-        //namedWindow("Control", CV_WINDOW_AUTOSIZE); //create a window called "Control"
+        // BASKETBALL 
+        int iLowH = 165;
+        int iHighH = 17;
         
-        int iLowH = 0;
-        int iHighH = 25;
-        
-        int iLowS = 0;
+        int iLowS = 50;
         int iHighS = 255;
         
-        int iLowV = 0;
-        int iHighV = 128;
+        int iLowV = 50;
+        int iHighV = 160;
+ 
+		namedWindow("My Window", 1);
         
         for(int i=0; i < inputVideo.get(CAP_PROP_FRAME_COUNT); ++i)
         {
             Mat frame, frameHSV, frameGray;
             inputVideo >> frame; // get a new frame from camera
             
-            cv::GaussianBlur(frame, frame, cv::Size(5, 5), 3.0, 3.0);
+            //cv::GaussianBlur(frame, frame, cv::Size(5, 5), 3.0, 3.0);
             
             cvtColor(frame, frameHSV, COLOR_BGR2HSV); // Convert the captured frame from BGR to HSV
             
-            Mat mask1;
+            Mat mask1, mask2;
             
-            inRange(frameHSV, Scalar(iLowH, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), mask1);   // Threshold the image
+            inRange(frameHSV, Scalar(0, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), mask1);   // Threshold the image
+            inRange(frameHSV, Scalar(iLowH, iLowS, iLowV), Scalar(180, iHighS, iHighV), mask2);  // Threshold the image
             
             // morphological opening (remove small objects from the foreground)
-            erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
-            dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+            erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
             
             // morphological closing (fill small holes in the foreground)
-            dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
-            erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+            dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+
+            erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
             
-            Mat frameFiltered, frameGray2;
-            frame.copyTo( frameFiltered, mask1 );
-            
-            /*if(i == 10)
-             {
-             vector<int> compression_params;
-             compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
-             compression_params.push_back(9);
-             imwrite("test.png", frame, compression_params);
-             }*/
-            
-            cv::cvtColor( frameFiltered, frameGray2, CV_BGR2GRAY );
-            vector<cv::Vec3f> circles;
-            cv::GaussianBlur(frameGray2, frameGray2, cv::Size(5, 5), 3.0, 3.0);
-            
-            HoughCircles( frameGray2, circles, CV_HOUGH_GRADIENT, 1, 60, 200, 20, 10, 30 );
-            
-            Mat result = frameFiltered;
-            
-            for( size_t i = 0; i < circles.size(); i++ )
+            // morphological closing (fill small holes in the foreground)
+            dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+                        
+            Mat mask, frameFiltered;
+            mask = mask1 + mask2;
+            frame.copyTo( frameFiltered, mask );
+                        
+            vector< vector<cv::Point> > contours;
+            cv::findContours(mask1, contours, CV_RETR_EXTERNAL,
+            CV_CHAIN_APPROX_NONE);
+             
+            // >>>>> Filtering
+            Mat result = frame;
+            vector<vector<cv::Point> > balls;
+            vector<cv::Rect> ballsBox;
+            for (size_t i = 0; i < contours.size(); i++)
             {
-                Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
-                int radius = cvRound(circles[i][2]);
-                cv::circle( result, center, 3, Scalar(0,255,255), -1);
-                cv::circle( result, center, radius, Scalar(0,0,255), 1 );
-            }
-            
-            /*vector< vector<cv::Point> > contours;
-             cv::findContours(mask1, contours, CV_RETR_EXTERNAL,
-             CV_CHAIN_APPROX_NONE);
-             
-             // >>>>> Filtering
-             vector<vector<cv::Point> > balls;
-             vector<cv::Rect> ballsBox;
-             for (size_t i = 0; i < contours.size(); i++)
-             {
-             cv::Rect bBox;
-             bBox = cv::boundingRect(contours[i]);
-             
-             float ratio = (float) bBox.width / (float) bBox.height;
-             if (ratio > 1.0f)
-             ratio = 1.0f / ratio;
-             
-             // Searching for a bBox almost square
-             if (ratio > 0.75 && bBox.area() >= 400)
-             {
-             balls.push_back(contours[i]);
-             ballsBox.push_back(bBox);
-             }
+		         cv::Rect bBox;
+		         bBox = cv::boundingRect(contours[i]);
+		         
+		         float ratio = (float) bBox.width / (float) bBox.height;
+		         if (ratio > 1.0f)
+		         ratio = 1.0f / ratio;
+		         
+		         // Searching for a bBox almost square
+		         if (ratio > 0.75 && bBox.area() > 200 && bBox.area() < 1000)
+		         {
+				     balls.push_back(contours[i]);
+				     ballsBox.push_back(bBox);
+			     }
+			     drawContours(result, contours, i, CV_RGB(255,0,0), 1);
              }
              
-             Mat result = frameFiltered;
              for (size_t i = 0; i < balls.size(); i++)
              {
-             cv::drawContours(result, balls, i, CV_RGB(20,150,20), 1);
-             cv::rectangle(result, ballsBox[i], CV_RGB(0,255,0), 2);
-             
-             cv::Point center;
-             center.x = ballsBox[i].x + ballsBox[i].width / 2;
-             center.y = ballsBox[i].y + ballsBox[i].height / 2;
-             cv::circle(result, center, 2, CV_RGB(20,150,20), -1);
-             
-             stringstream sstr;
-             sstr << "(" << center.x << "," << center.y << ")";
-             cv::putText(result, sstr.str(),
-             cv::Point(center.x + 3, center.y - 3),
-             cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(20,150,20), 2);
+		         cv::drawContours(result, balls, i, CV_RGB(20,150,20), 2);
+		         cv::rectangle(result, ballsBox[i], CV_RGB(0,255,0), 2);
+		         
+		         cv::Point center;
+		         center.x = ballsBox[i].x + ballsBox[i].width / 2;
+		         center.y = ballsBox[i].y + ballsBox[i].height / 2;
+		         cv::circle(result, center, 2, CV_RGB(20,150,20), -1);
+		         
+		         stringstream sstr;
+		         sstr << "(" << center.x << "," << center.y << ")";
+		         cv::putText(result, sstr.str(),
+		         cv::Point(center.x + 3, center.y - 3),
+		         cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(20,150,20), 2);
              }
-             */
-            imshow("Filtered Image", result); //show the thresholded image
+             
+ 
+			setMouseCallback("My Window", CallBackFunc, &frameHSV);	
+            imshow("My Window", result);
             
-            if(waitKey(30) >= 0) break;
+            /* KEY INPUTS */
+            int keynum = waitKey(30) & 0xFF;
+            if(keynum == 113)      // press q
+            	break;
+            else if(keynum == 32)  // press space
+			{
+				keynum = 0;
+				while(keynum != 32 && keynum != 113)
+					keynum = waitKey(30) & 0xFF;
+				if(keynum == 113) 
+					break;
+			}
         }
         inputVideo.release();
         outputVideo.release();
