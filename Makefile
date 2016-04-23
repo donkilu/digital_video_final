@@ -4,7 +4,7 @@
 
 INCLUDE = -I/usr/include -I/usr/X11/include
 LIBDIR = -L/usr/local/lib
-LIBS =  -lopencv_objdetect -lopencv_features2d -lopencv_imgproc -lopencv_highgui -lopencv_core -lopencv_videoio
+LIBS =  -lopencv_objdetect -lopencv_features2d -lopencv_imgproc -lopencv_highgui -lopencv_videoio -lopencv_core
 
 CFLAGS = -g
 

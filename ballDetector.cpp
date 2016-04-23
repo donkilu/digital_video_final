@@ -45,7 +45,7 @@ int main(int argc, char** argv)
 		int iHighS = 255;
 
 		int iLowV = 0;
-		int iHighV = 255;
+		int iHighV = 128;
 		/*
 		//Create trackbars in "Control" window
 		cvCreateTrackbar("LowH", "Control", &iLowH, 179); //Hue (0 - 179)
@@ -60,35 +60,61 @@ int main(int argc, char** argv)
 	        
 		for(int i=0; i < inputVideo.get(CAP_PROP_FRAME_COUNT); ++i)
 		{
-		    Mat frame, frameHSV;
+		    Mat frame, frameHSV, frameGray;
 		    inputVideo >> frame; // get a new frame from camera
 
 			cvtColor(frame, frameHSV, COLOR_BGR2HSV); // Convert the captured frame from BGR to HSV
 
 			Mat mask, mask1, mask2;
 
-			inRange(frameHSV, Scalar(0, iLowS, iLowV), Scalar(10, iHighS, iHighV), mask1);    // Threshold the image
-			inRange(frameHSV, Scalar(170, iLowS, iLowV), Scalar(180, iHighS, iHighV), mask2); // Threshold the image
+			inRange(frameHSV, Scalar(0, iLowS, iLowV), Scalar(25, iHighS, iHighV), mask1);      // Threshold the image
+			//inRange(frameHSV, Scalar(170, iLowS, iLowV), Scalar(180, iHighS, iHighV), mask2); // Threshold the image
 			  
 			// morphological opening (remove small objects from the foreground)
 			erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
 			dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
 		
-			erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
-			dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
+			//erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+			//dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
 
 			// morphological closing (fill small holes in the foreground)
 			dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
 			erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
 
-			dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
-			erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+			//dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
+			//erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
 
 			mask = mask1 + mask2;
 
 			Mat frameFiltered;
 			frame.copyTo( frameFiltered, mask );
+			
+			if(i == 10) 
+			{			
+				vector<int> compression_params;
+				compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
+				compression_params.push_back(9);
+				imwrite("test.png", frame, compression_params);
+			}
+			
+			/* TODO Other Transform */
+			/*Mat detectedEdge;
+			/// Convert the image to grayscale
+			cvtColor( frame, frameGray, CV_BGR2GRAY );
+			/// Reduce noise with a kernel 3x3
+			blur( frameGray, detectedEdge, Size(3,3) );
 
+			/// Canny detector
+			int minTh = 50;
+			int kernel_size = 3;
+			Canny( detectedEdge, detectedEdge, minTh, minTh*2, kernel_size );
+			*/
+			/// Using Canny's output as a mask, we display our result
+			//dst = Scalar::all(0);
+
+			//src.copyTo( dst, detected_edges);
+			//imshow( window_name, dst );
+			
 			imshow("Filtered Image", frameFiltered); //show the thresholded image
 
 		    if(waitKey(30) >= 0) break;
