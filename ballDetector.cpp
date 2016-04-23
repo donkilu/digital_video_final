@@ -76,8 +76,22 @@ int main(int argc, char** argv)
 				compression_params.push_back(9);
 				imwrite("test.png", frame, compression_params);
 			}*/
+    		
+    		cv::cvtColor( frame, frameGray, CV_BGR2GRAY );
+			vector<cv::Vec3f> circles;
+			HoughCircles( frameGray, circles, CV_HOUGH_GRADIENT, 1, 60, 200, 20, 10, 30 );
 
-		    vector<vector<cv::Point> > contours;
+			Mat result = frame;
+			
+			for( size_t i = 0; i < circles.size(); i++ ) 
+			{
+				Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
+				int radius = cvRound(circles[i][2]);
+				cv::circle( result, center, 3, Scalar(0,255,255), -1);
+				cv::circle( result, center, radius, Scalar(0,0,255), 1 );
+			}
+
+		    /*vector< vector<cv::Point> > contours;
 		    cv::findContours(mask1, contours, CV_RETR_EXTERNAL,
                          CV_CHAIN_APPROX_NONE);						
 
@@ -118,7 +132,7 @@ int main(int argc, char** argv)
 						    cv::Point(center.x + 3, center.y - 3),
 						    cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(20,150,20), 2);
 			}
-
+			*/
 			imshow("Filtered Image", result); //show the thresholded image
 
 		    if(waitKey(30) >= 0) break;
