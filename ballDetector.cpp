@@ -62,7 +62,7 @@ int main(int argc, char** argv)
             Mat frame, frameHSV, frameGray;
             inputVideo >> frame; // get a new frame from camera
             
-            //cv::GaussianBlur(frame, frame, cv::Size(5, 5), 3.0, 3.0);
+            cv::GaussianBlur(frame, frame, cv::Size(5, 5), 3.0, 3.0);
             
             cvtColor(frame, frameHSV, COLOR_BGR2HSV); // Convert the captured frame from BGR to HSV
             
