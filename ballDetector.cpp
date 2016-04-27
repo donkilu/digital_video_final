@@ -45,77 +45,194 @@ int main(int argc, char** argv)
             return -1;
         }
         
-        // BASKETBALL 
+        // Basketball Color 
         int iLowH = 165;
-        int iHighH = 17;
+        int iHighH = 20;
         
         int iLowS = 50;
-        int iHighS = 255;
+        int iHighS = 225;
         
         int iLowV = 50;
         int iHighV = 160;
+
+        // Field Color
+        int fieldLowH = 0;
+        int fieldHighH = 20;
+        
+        int fieldLowS = 50;
+        int fieldHighS = 150;
+        
+        int fieldLowV = 160;
+        int fieldHighV = 255;
  
 		namedWindow("My Window", 1);
         
         for(int i=0; i < inputVideo.get(CAP_PROP_FRAME_COUNT); ++i)
         {
-            Mat frame, frameHSV, frameGray;
+            Mat frame, frame_blurred, frameHSV, frameGray;
             inputVideo >> frame; // get a new frame from camera
             
-            cv::GaussianBlur(frame, frame, cv::Size(5, 5), 3.0, 3.0);
+            cv::GaussianBlur(frame, frame_blurred, cv::Size(5, 5), 3.0, 3.0);
             
-            cvtColor(frame, frameHSV, COLOR_BGR2HSV); // Convert the captured frame from BGR to HSV
+            cvtColor(frame_blurred, frameHSV, COLOR_BGR2HSV); // Convert the captured frame from BGR to HSV
             
-            Mat mask1, mask2;
+            Mat mask, mask1, mask2, field_mask;
             
-            inRange(frameHSV, Scalar(0, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), mask1);   // Threshold the image
-            inRange(frameHSV, Scalar(iLowH, iLowS, iLowV), Scalar(180, iHighS, iHighV), mask2);  // Threshold the image
+            // creating masks
+            inRange(frameHSV, Scalar(0, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), mask1);
+            inRange(frameHSV, Scalar(iLowH, iLowS, iLowV), Scalar(180, iHighS, iHighV), mask2);
+            inRange(frameHSV, Scalar(fieldLowH, fieldLowS, fieldLowV), Scalar(fieldHighH, fieldHighS, fieldHighV), field_mask);
+            
+            mask = mask1 + mask2;
             
             // morphological opening (remove small objects from the foreground)
-            erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-            dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            erode(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            dilate(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
             
             // morphological closing (fill small holes in the foreground)
-            dilate(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-            erode(mask1, mask1, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-
-            erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-            dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-            
+            //dilate(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            //erode(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+			
+            // morphological opening (remove small objects from the foreground)
+            erode(field_mask, field_mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            dilate(field_mask, field_mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            /*
             // morphological closing (fill small holes in the foreground)
-            dilate(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-            erode(mask2, mask2, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-                        
-            Mat mask, frameFiltered;
-            mask = mask1 + mask2;
+            dilate(field_mask, field_mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            erode(field_mask, field_mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+           */              
+            Mat frameFiltered;
             frame.copyTo( frameFiltered, mask );
                         
-            vector< vector<cv::Point> > contours;
-            cv::findContours(mask1, contours, CV_RETR_EXTERNAL,
+            vector< vector<cv::Point> > contours_ball;
+            vector< vector<cv::Point> > contours_field;           
+            cv::findContours(mask, contours_ball, CV_RETR_EXTERNAL,
+            CV_CHAIN_APPROX_NONE);
+            cv::findContours(field_mask, contours_field, CV_RETR_EXTERNAL,
             CV_CHAIN_APPROX_NONE);
              
-            // >>>>> Filtering
-            Mat result = frame;
+			/* draw result */
+            Mat result = frame; 
+
+            // pick field boundary
+			Point l_top( mask.cols/2, mask.rows );
+			Point l_bot( mask.cols/2, 0 );
+			Point r_top( mask.cols/2, mask.rows );
+			Point r_bot( mask.cols/2, 0 );
+			Point m_top_l( mask.cols/2, mask.rows );
+			Point m_top_r( mask.cols/2, mask.rows );
+						
+            for (size_t i = 0; i < contours_field.size(); i++)
+            {
+		        Rect bBox;
+		        bBox = cv::boundingRect(contours_field[i]);
+ 				// don't consider field contours that are too small
+ 				if( bBox.area() < 900 )
+					continue;
+ 		         
+ 		        int l_bound = bBox.x;
+ 		        int r_bound = bBox.x + bBox.width;
+ 		        int u_bound = bBox.y;
+ 		        int b_bound = bBox.y + bBox.height;
+ 		         
+ 		        // if we found a more left boundary 
+ 		        if( l_bound <= l_top.x )
+ 		        {
+	 		    	if( l_bound == l_top.x )
+ 		         	{
+ 		         		if( u_bound < l_top.y )
+ 		         			l_top = Point( l_bound, u_bound );
+ 		         		if( b_bound > l_bot.y )
+	 		         		l_bot = Point( l_bound, b_bound );
+ 		         	}
+ 		         	else  // overwrite ltop, lbot
+ 		         	{
+ 		         		l_top = Point( l_bound, u_bound );
+ 		         		l_bot = Point( l_bound, b_bound );
+ 		        	}
+ 		        }
+ 		         
+ 		        // if we found a more right boundary 
+ 		        if( r_bound >= r_top.x )
+ 		        {
+	 		    	if( r_bound == r_top.x )
+ 		         	{
+ 		         		if( u_bound < r_top.y )
+ 		         			r_top = Point( r_bound, u_bound );
+ 		         		if( b_bound > r_bot.y )
+	 		         		r_bot = Point( r_bound, b_bound );
+ 		         	}
+ 		        	else  // overwrite rtop, rbot
+ 		        	{
+ 		        		r_top = Point( r_bound, u_bound );
+ 		        		r_bot = Point( r_bound, b_bound );
+ 		        	}
+ 		        }
+ 		         
+ 		        // found a more upper boundary
+ 		        if( u_bound < m_top_l.y )
+ 		        {
+ 		        	m_top_l = Point( l_bound, u_bound );
+ 		        	m_top_r = Point( r_bound, u_bound ); 		        	
+ 		        }	
+            }    
+			
+			Point field_bound[6];
+			field_bound[0] = l_top;
+			field_bound[1] = l_bot;
+			field_bound[2] = r_bot;
+			field_bound[3] = r_top;
+			field_bound[4] = m_top_r;
+			field_bound[5] = m_top_l;
+			
+			Mat field( mask.rows, mask.cols, CV_8UC1, Scalar(0) );
+			fillConvexPoly( field, field_bound, 6, 255);
+			
+			cv::line( result, l_top,   l_bot,   CV_RGB(0,255,255), 2);	
+			cv::line( result, l_bot,   r_bot,   CV_RGB(0,255,255), 2);	
+			cv::line( result, r_bot,   r_top,   CV_RGB(0,255,255), 2);	
+			cv::line( result, r_top,   m_top_r, CV_RGB(0,255,255), 2);	
+			cv::line( result, m_top_r, m_top_l, CV_RGB(0,255,255), 2);
+			cv::line( result, m_top_l, l_top,   CV_RGB(0,255,255), 2);
+
+            // sieves
             vector<vector<cv::Point> > balls;
             vector<cv::Rect> ballsBox;
-            for (size_t i = 0; i < contours.size(); i++)
+            for (size_t i = 0; i < contours_ball.size(); i++)
             {
+			     drawContours(result, contours_ball, i, CV_RGB(255,0,0), 1);  // fill the area
+			     
 		         cv::Rect bBox;
-		         bBox = cv::boundingRect(contours[i]);
-		         
+		         bBox = cv::boundingRect(contours_ball[i]);
+
+		         // ball size sieve
+		         if( bBox.area() < 200 || bBox.area() > 1000 ) 
+		         	continue;
+		         	
+		         // ratio sieve
 		         float ratio = (float) bBox.width / (float) bBox.height;
-		         if (ratio > 1.0f)
-		         ratio = 1.0f / ratio;
+				 if( ratio < 1.0/3.0 || ratio > 3.0 )
+				 	continue;
 		         
-		         // Searching for a bBox almost square
-		         if (ratio > 0.75 && bBox.area() > 200 && bBox.area() < 1000)
-		         {
-				     balls.push_back(contours[i]);
-				     ballsBox.push_back(bBox);
-			     }
-			     drawContours(result, contours, i, CV_RGB(255,0,0), 1);
-             }
+                 // ball center sieve: since we've done dilate and erode, not necessary to do.
+		         cv::Point center;
+		         center.x = bBox.x + bBox.width / 2;
+		         center.y = bBox.y + bBox.height / 2;					
+				 /*
+				 uchar center_v = mask.at<uchar>( center );
+				 if(center_v != 1)
+			     	continue;
+			  	 */ 
+			  	 
+			  	 // ball-on-court assumption 
+			  	 if(field.at<uchar>(center) != 255)
+					continue;
+				
+			     balls.push_back(contours_ball[i]);
+			     ballsBox.push_back(bBox);
+             }          
              
+             // draw candidates
              for (size_t i = 0; i < balls.size(); i++)
              {
 		         cv::drawContours(result, balls, i, CV_RGB(20,150,20), 2);
