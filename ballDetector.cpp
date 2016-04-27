@@ -46,11 +46,11 @@ int main(int argc, char** argv)
         }
         
         // Basketball Color 
-        int iLowH = 180;
+        int iLowH = 175;
         int iHighH = 20;
         
         int iLowS = 50;
-        int iHighS = 225;
+        int iHighS = 255;
         
         int iLowV = 50;
         int iHighV = 160;
@@ -191,8 +191,9 @@ int main(int argc, char** argv)
 	 		        {
 	 		        	m_top_l = Point( l_bound, u_bound );
 	 		        	m_top_r = Point( r_bound, u_bound ); 		        	
-	 		        }	
-				} 		         
+	 		        }
+    		        //cv::rectangle(result, bBox, CV_RGB(0,255,0), 2);	
+				}
             }    
 			
 			field_bound[0] = l_top;
@@ -224,7 +225,7 @@ int main(int argc, char** argv)
 		        bBox = cv::boundingRect(contours_ball[i]);
 
 		        // ball size sieve
-		        if( bBox.area() < 200 || bBox.area() > 1000 ) 
+		        if( bBox.area() < 200 || bBox.area() > 1600 ) 
 		        	continue;
 		         	
 		        // ratio sieve
@@ -274,13 +275,15 @@ int main(int argc, char** argv)
 		        		        	
 		        //cv::circle(result, cvPoint(prev_center.x, prev_center.y), 1, CV_RGB(20,150,20), -1, 8, 0);
 		        //cv::circle(result, cvPoint(curr_center.x, curr_center.y), 1, CV_RGB(20,150,20), -1, 8, 0);
-				cv::line( result, prev_center, curr_center, CV_RGB(255,0,0), 3);	
+				cv::line( result, prev_center, curr_center, CV_RGB(255,255,0), 2);	
 		         
+		        /*
 		        stringstream sstr;
 		        sstr << "(" << prev_center.x << "," << prev_center.y << ")";
 		        cv::putText(result, sstr.str(),
 		        cv::Point(prev_center.x + 3, prev_center.y - 3),
 		        cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(20,150,20), 2);
+		        */
             }
              
  
