@@ -97,7 +97,7 @@ int main(int argc, char** argv)
             vector<cv::Vec3f> circles;
             cv::GaussianBlur(frameGray2, frameGray2, cv::Size(5, 5), 2.0, 2.0);
             
-            HoughCircles( frameGray2, circles, CV_HOUGH_GRADIENT, 1, frameGray2.rows/8, 150, 18, 5,  150 );
+            HoughCircles( frameGray2, circles, CV_HOUGH_GRADIENT, 1, frameGray2.rows/8, 150, 18, 15,  50 );
             
             Mat result = frame;
             
