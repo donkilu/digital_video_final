@@ -5,6 +5,7 @@
 #include <opencv2/highgui/highgui.hpp>  // Video write
 #include "opencv2/opencv.hpp"
 #include "opencv2/videoio.hpp"
+#include "opencv2/video/tracking.hpp"
 
 using namespace std;
 using namespace cv;
@@ -68,7 +69,7 @@ int main(int argc, char** argv)
         }
         
         // Basketball Color 
-        int iLowH = 175;
+        int iLowH = 170;
         int iHighH = 20;
         
         int iLowS = 50;
@@ -109,6 +110,25 @@ int main(int argc, char** argv)
 			enterkey = waitKey(30) & 0xFF;
         	imshow("Result Window", mp.img);
 		}
+        Rect  lastBallBox;
+		Point lastBallCenter;
+		Point lastMotion;
+		
+		/* Kalman Filter Initialization */
+		KalmanFilter KF(4, 2, 0);
+		float transMatrixData[16] = {1,0,1,0, 0,1,0,1, 0,0,1,0, 0,0,0,1};
+		KF.transitionMatrix = Mat(4, 4, CV_32F, transMatrixData);
+		Mat_<float> measurement(2,1);
+		measurement.setTo(Scalar(0));
+
+		KF.statePre.at<float>(0) = mp.pt.x;
+		KF.statePre.at<float>(1) = mp.pt.y;
+		KF.statePre.at<float>(2) = 0;
+		KF.statePre.at<float>(3) = 0;
+		setIdentity(KF.measurementMatrix);
+		setIdentity(KF.processNoiseCov, Scalar::all(1e-4));
+		setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
+		setIdentity(KF.errorCovPost, Scalar::all(.1));
 
         /* start tracking */		
 		setMouseCallback("Result Window", CallBackFunc, &frameHSV);	
@@ -222,6 +242,7 @@ int main(int argc, char** argv)
             vector< vector<cv::Point> > balls;
             vector<cv::Point2f> prev_ball_centers;
             vector<cv::Rect> ballsBox;
+            Point best_candidate;
             for (size_t i = 0; i < contours_ball.size(); i++)
 			{
 			    drawContours(result, contours_ball, i, CV_RGB(255,0,0), 1);  // fill the area
@@ -231,19 +252,38 @@ int main(int argc, char** argv)
 			    Point center;
 			    center.x = bBox.x + bBox.width / 2;
 			    center.y = bBox.y + bBox.height / 2;		         
-		        
-		        // meet prediction, add in!
-				if( mp.pt.x > bBox.x && mp.pt.x < bBox.x + bBox.width && 
+
+		        // meet prediction!
+				if( mp.pt.x > bBox.x && mp.pt.x < bBox.x + bBox.width &&
 				    mp.pt.y > bBox.y && mp.pt.y < bBox.y + bBox.height)
 				{
-					balls.push_back(contours_ball[i]);
-					prev_ball_centers.push_back(center);
-					ballsBox.push_back(bBox);				
+					// initialization of ball position at first frame
+					if( frame_num == 1 || ( bBox.area() <= lastBallBox.area() * 1.5 && bBox.area() >= lastBallBox.area() * 0.5) )
+					{
+						lastBallBox = bBox;
+						lastBallCenter = center;
+
+						balls.push_back(contours_ball[i]);
+						prev_ball_centers.push_back(center);
+						ballsBox.push_back(bBox);
+						best_candidate = center;
+					}
+					else
+					{
+						cout << "area changed!" << endl;
+						// if the block containing ball becomes too large,
+						// we use last center + motion as predicted center
+						balls.push_back(contours_ball[i]);
+						prev_ball_centers.push_back( lastBallCenter+lastMotion );
+						ballsBox.push_back(bBox);
+						best_candidate = lastBallCenter + lastMotion; 
+					}
 				}
 				else
 				{
 				    // ball size sieve
-				    if( bBox.area() < 200 || bBox.area() > 1600 ) 
+				    /*
+				    if( bBox.area() < 100 || bBox.area() > 1600 ) 
 				    	continue;
 				     	
 				    // ratio sieve
@@ -252,7 +292,7 @@ int main(int argc, char** argv)
 					 	continue;
 					
 		            // ball center sieve: since we've done dilate and erode, not necessary to do.
-					/*
+					
 					uchar center_v = mask.at<uchar>( center );*
 					if(center_v != 1)
 						continue;
@@ -268,17 +308,22 @@ int main(int argc, char** argv)
 				}
             }
 
+            // Kalman Filter Prediction
+			Mat prediction = KF.predict();
+			Point predictPt(prediction.at<float>(0),prediction.at<float>(1));
+			// Kalman Filter Update
+			Mat estimated = KF.correct( best_candidate );
+
 			vector<Point2f> cur_ball_centers;
             vector<uchar> featuresFound;
             Mat err;
             TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS, 20, 0.03);
 			Size winSize(31, 31);
-			if( prev_ball_centers.size() > 0)
+			if( prev_ball_centers.size() > 0 )
 				calcOpticalFlowPyrLK(prev_gray, cur_gray, prev_ball_centers, cur_ball_centers, featuresFound, err, winSize, 3, termcrit, 0, 0.001);
-             
-            // draw candidates
-		    circle(result, mp.pt, 2, CV_RGB(255,255,255), 2);			
-
+			
+		    circle(result, mp.pt, 2, CV_RGB(255,255,255), 2);
+			
             bool ball_found = false;
             for (size_t i = 0; i < balls.size(); i++)
             {
@@ -287,7 +332,10 @@ int main(int argc, char** argv)
 				    mp.pt.y > ballsBox[i].y && mp.pt.y < ballsBox[i].y + ballsBox[i].height)
 				{
 			        cv::rectangle(result, ballsBox[i], CV_RGB(0,255,0), 2);
-			        mp.pt = mp.pt + cur_ball_centers[i] - prev_ball_centers[i];
+			        Point motion = cur_ball_centers[i] - prev_ball_centers[i];
+			        // update points and lastMotion
+			        mp.pt = Point2f(mp.pt.x+motion.x, mp.pt.y+motion.y);  // TODO replace with predicted points of kalman filter here.
+			        lastMotion = motion;
 			        ball_found = true;
 				}
 				
@@ -304,33 +352,39 @@ int main(int argc, char** argv)
 			if(!ball_found)
 			{
 				int search_distance_threshold = 60*60;
-				int min_distance = 10000;
-				int min_i = 0;
+				int closest_dist      = 10000;
+				int closest_area_diff = 10000;
+				int best_i = 0;
 				
 		        for (size_t i = 0; i < balls.size(); i++)
 		        {
 		        	int diff_x = prev_ball_centers[i].x - mp.pt.x;
 		        	int diff_y = prev_ball_centers[i].y - mp.pt.y;
-		        	int distance = diff_x * diff_x + diff_y * diff_y;
-
+		        	int distance  = diff_x * diff_x + diff_y * diff_y;
+					int area_diff = abs(ballsBox[i].area()-lastBallBox.area());
 					// if distance is small
-					if( distance < search_distance_threshold && distance < min_distance )
+					if( distance < search_distance_threshold &&
+					    distance < closest_dist && 
+					    area_diff < closest_area_diff )
 					{
-						min_distance = distance;
-						min_i = i;
+						closest_dist      = distance;
+						closest_area_diff =  area_diff;
+						best_i = i;
 						ball_found = true;
 					}				
 		        }
 
 		        if(ball_found)
 				{
-				    cv::rectangle(result, ballsBox[min_i], CV_RGB(0,255,0), 2);
-			        mp.pt = mp.pt + cur_ball_centers[min_i] - prev_ball_centers[min_i];
+					// reset mp.pt
+				    cv::rectangle(result, ballsBox[best_i], CV_RGB(255,255,0), 2);
+			        mp.pt = cur_ball_centers[best_i];
 			    }
 			    else
 				{
 					// if ball still not found... stay at the same direction
-				    circle(result, mp.pt, 5, CV_RGB(255,255,255), 2);	
+				    circle(result, mp.pt, 5, CV_RGB(255,255,255), 2);
+				    mp.pt = lastBallCenter + lastMotion;
 				}
 			}
 			   
