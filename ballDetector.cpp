@@ -46,11 +46,11 @@ int main(int argc, char** argv)
         }
         
         // Basketball Color 
-        int iLowH = 165;
+        int iLowH = 175;
         int iHighH = 20;
         
         int iLowS = 50;
-        int iHighS = 225;
+        int iHighS = 255;
         
         int iLowV = 50;
         int iHighV = 160;
@@ -65,20 +65,38 @@ int main(int argc, char** argv)
         int fieldLowV = 160;
         int fieldHighV = 255;
  
-		namedWindow("My Window", 1);
+		namedWindow("Result Window", 1);
+		
+		// Mat declaration
+		Mat prev_frame, prev_gray, cur_frame, cur_gray;
+        Mat frame_blurred, frameHSV, frameGray;
         
-        for(int i=0; i < inputVideo.get(CAP_PROP_FRAME_COUNT); ++i)
+        // take the first frame
+        inputVideo >> prev_frame;
+		
+        // field boundary
+		Point l_top( prev_frame.cols/2, prev_frame.rows );
+		Point l_bot( prev_frame.cols/2, 0 );
+		Point r_top( prev_frame.cols/2, prev_frame.rows );
+		Point r_bot( prev_frame.cols/2, 0 );
+		Point m_top_l( prev_frame.cols/2, prev_frame.rows );
+		Point m_top_r( prev_frame.cols/2, prev_frame.rows );
+		Point field_bound[6];
+        
+        for(int frame_num=1; frame_num < inputVideo.get(CAP_PROP_FRAME_COUNT); ++frame_num)
         {
-            Mat frame, frame_blurred, frameHSV, frameGray;
-            inputVideo >> frame; // get a new frame from camera
+            inputVideo >> cur_frame; // get a new frame from camera
             
-            cv::GaussianBlur(frame, frame_blurred, cv::Size(5, 5), 3.0, 3.0);
+            // Blur & convert frame to HSV color space
+            cv::GaussianBlur(prev_frame, frame_blurred, cv::Size(5, 5), 3.0, 3.0);
+            cvtColor(frame_blurred, frameHSV, COLOR_BGR2HSV);
             
-            cvtColor(frame_blurred, frameHSV, COLOR_BGR2HSV); // Convert the captured frame from BGR to HSV
-            
-            Mat mask, mask1, mask2, field_mask;
+            // gray scale current frame
+    		cvtColor(prev_frame, prev_gray, CV_BGR2GRAY);            
+    		cvtColor(cur_frame, cur_gray, CV_BGR2GRAY);
             
             // creating masks
+            Mat mask, mask1, mask2, field_mask;
             inRange(frameHSV, Scalar(0, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), mask1);
             inRange(frameHSV, Scalar(iLowH, iLowS, iLowV), Scalar(180, iHighS, iHighV), mask2);
             inRange(frameHSV, Scalar(fieldLowH, fieldLowS, fieldLowV), Scalar(fieldHighH, fieldHighS, fieldHighV), field_mask);
@@ -96,88 +114,88 @@ int main(int argc, char** argv)
             // morphological opening (remove small objects from the foreground)
             erode(field_mask, field_mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
             dilate(field_mask, field_mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-            /*
+            
             // morphological closing (fill small holes in the foreground)
             dilate(field_mask, field_mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
             erode(field_mask, field_mask, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-           */              
-            Mat frameFiltered;
-            frame.copyTo( frameFiltered, mask );
+                         
+            //Mat frameFiltered;
+            //cur_frame.copyTo( frameFiltered, mask );
                         
             vector< vector<cv::Point> > contours_ball;
             vector< vector<cv::Point> > contours_field;           
-            cv::findContours(mask, contours_ball, CV_RETR_EXTERNAL,
-            CV_CHAIN_APPROX_NONE);
-            cv::findContours(field_mask, contours_field, CV_RETR_EXTERNAL,
-            CV_CHAIN_APPROX_NONE);
-             
-			/* draw result */
-            Mat result = frame; 
-
-            // pick field boundary
-			Point l_top( mask.cols/2, mask.rows );
-			Point l_bot( mask.cols/2, 0 );
-			Point r_top( mask.cols/2, mask.rows );
-			Point r_bot( mask.cols/2, 0 );
-			Point m_top_l( mask.cols/2, mask.rows );
-			Point m_top_r( mask.cols/2, mask.rows );
-						
-            for (size_t i = 0; i < contours_field.size(); i++)
-            {
-		        Rect bBox;
-		        bBox = cv::boundingRect(contours_field[i]);
- 				// don't consider field contours that are too small
- 				if( bBox.area() < 900 )
-					continue;
- 		         
- 		        int l_bound = bBox.x;
- 		        int r_bound = bBox.x + bBox.width;
- 		        int u_bound = bBox.y;
- 		        int b_bound = bBox.y + bBox.height;
- 		         
- 		        // if we found a more left boundary 
- 		        if( l_bound <= l_top.x )
- 		        {
-	 		    	if( l_bound == l_top.x )
- 		         	{
- 		         		if( u_bound < l_top.y )
- 		         			l_top = Point( l_bound, u_bound );
- 		         		if( b_bound > l_bot.y )
+            cv::findContours(mask, contours_ball, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+            cv::findContours(field_mask, contours_field, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+            
+            Mat result = prev_frame;
+			
+			// update field boundary every 8 frames
+			if(frame_num % 8 == 1)
+			{		
+				l_top = Point( prev_frame.cols/2, prev_frame.rows );
+				l_bot = Point( prev_frame.cols/2, 0 );
+				r_top = Point( prev_frame.cols/2, prev_frame.rows );
+				r_bot = Point( prev_frame.cols/2, 0 );
+				m_top_l = Point( prev_frame.cols/2, prev_frame.rows );
+				m_top_r = Point( prev_frame.cols/2, prev_frame.rows );
+				
+		        for (size_t i = 0; i < contours_field.size(); i++)
+		        {
+				    Rect bBox;
+				    bBox = cv::boundingRect(contours_field[i]);
+	 				// don't consider field contours that are too small
+	 				if( bBox.area() < 900 )
+						continue;
+	 		         
+	 		        int l_bound = bBox.x;
+	 		        int r_bound = bBox.x + bBox.width;
+	 		        int u_bound = bBox.y;
+	 		        int b_bound = bBox.y + bBox.height;
+	 		         
+	 		        // if we found a more left boundary 
+	 		        if( l_bound <= l_top.x )
+	 		        {
+		 		    	if( l_bound == l_top.x )
+	 		         	{
+	 		         		if( u_bound < l_top.y )
+	 		         			l_top = Point( l_bound, u_bound );
+	 		         		if( b_bound > l_bot.y )
+		 		         		l_bot = Point( l_bound, b_bound );
+	 		         	}
+	 		         	else  // overwrite ltop, lbot
+	 		         	{
+	 		         		l_top = Point( l_bound, u_bound );
 	 		         		l_bot = Point( l_bound, b_bound );
- 		         	}
- 		         	else  // overwrite ltop, lbot
- 		         	{
- 		         		l_top = Point( l_bound, u_bound );
- 		         		l_bot = Point( l_bound, b_bound );
- 		        	}
- 		        }
- 		         
- 		        // if we found a more right boundary 
- 		        if( r_bound >= r_top.x )
- 		        {
-	 		    	if( r_bound == r_top.x )
- 		         	{
- 		         		if( u_bound < r_top.y )
- 		         			r_top = Point( r_bound, u_bound );
- 		         		if( b_bound > r_bot.y )
+	 		        	}
+	 		        }
+	 		         
+	 		        // if we found a more right boundary 
+	 		        if( r_bound >= r_top.x )
+	 		        {
+		 		    	if( r_bound == r_top.x )
+	 		         	{
+	 		         		if( u_bound < r_top.y )
+	 		         			r_top = Point( r_bound, u_bound );
+	 		         		if( b_bound > r_bot.y )
+		 		         		r_bot = Point( r_bound, b_bound );
+	 		         	}
+	 		        	else  // overwrite rtop, rbot
+	 		        	{
+	 		         		r_top = Point( r_bound, u_bound );
 	 		         		r_bot = Point( r_bound, b_bound );
- 		         	}
- 		        	else  // overwrite rtop, rbot
- 		        	{
- 		        		r_top = Point( r_bound, u_bound );
- 		        		r_bot = Point( r_bound, b_bound );
- 		        	}
- 		        }
- 		         
- 		        // found a more upper boundary
- 		        if( u_bound < m_top_l.y )
- 		        {
- 		        	m_top_l = Point( l_bound, u_bound );
- 		        	m_top_r = Point( r_bound, u_bound ); 		        	
- 		        }	
+	 		        	}
+	 		        }
+	
+	 		        // found a more upper boundary
+	 		        if( u_bound < m_top_l.y )
+	 		        {
+	 		        	m_top_l = Point( l_bound, u_bound );
+	 		        	m_top_r = Point( r_bound, u_bound ); 		        	
+	 		        }
+    		        //cv::rectangle(result, bBox, CV_RGB(0,255,0), 2);	
+				}
             }    
 			
-			Point field_bound[6];
 			field_bound[0] = l_top;
 			field_bound[1] = l_bot;
 			field_bound[2] = r_bot;
@@ -196,63 +214,84 @@ int main(int argc, char** argv)
 			cv::line( result, m_top_l, l_top,   CV_RGB(0,255,255), 2);
 
             // sieves
-            vector<vector<cv::Point> > balls;
+            vector< vector<cv::Point> > balls;
+            vector<cv::Point2f> prev_ball_centers;
             vector<cv::Rect> ballsBox;
             for (size_t i = 0; i < contours_ball.size(); i++)
-            {
-			     drawContours(result, contours_ball, i, CV_RGB(255,0,0), 1);  // fill the area
+			{
+			    drawContours(result, contours_ball, i, CV_RGB(255,0,0), 1);  // fill the area
 			     
-		         cv::Rect bBox;
-		         bBox = cv::boundingRect(contours_ball[i]);
+		        cv::Rect bBox;
+		        bBox = cv::boundingRect(contours_ball[i]);
 
-		         // ball size sieve
-		         if( bBox.area() < 200 || bBox.area() > 1000 ) 
-		         	continue;
+		        // ball size sieve
+		        if( bBox.area() < 200 || bBox.area() > 1600 ) 
+		        	continue;
 		         	
-		         // ratio sieve
-		         float ratio = (float) bBox.width / (float) bBox.height;
-				 if( ratio < 1.0/3.0 || ratio > 3.0 )
+		        // ratio sieve
+		        float ratio = (float) bBox.width / (float) bBox.height;
+				if( ratio < 1.0/3.0 || ratio > 3.0 )
 				 	continue;
 		         
-                 // ball center sieve: since we've done dilate and erode, not necessary to do.
-		         cv::Point center;
-		         center.x = bBox.x + bBox.width / 2;
-		         center.y = bBox.y + bBox.height / 2;					
-				 /*
-				 uchar center_v = mask.at<uchar>( center );
-				 if(center_v != 1)
-			     	continue;
-			  	 */ 
+                // ball center sieve: since we've done dilate and erode, not necessary to do.
+		        cv::Point center;
+		        center.x = bBox.x + bBox.width / 2;
+		        center.y = bBox.y + bBox.height / 2;
+		        		        					
+				/*
+				uchar center_v = mask.at<uchar>( center );*
+				if(center_v != 1)
+			    	continue;
+			  	*/ 
 			  	 
-			  	 // ball-on-court assumption 
-			  	 if(field.at<uchar>(center) != 255)
-					continue;
-				
-			     balls.push_back(contours_ball[i]);
-			     ballsBox.push_back(bBox);
-             }          
+			  	// ball-on-court assumption 
+			  	//if(field.at<uchar>(center) != 255)
+				//	continue;
+									 
+			    balls.push_back(contours_ball[i]);
+				prev_ball_centers.push_back(center);
+				ballsBox.push_back(bBox);
+            }
+
+			vector<cv::Point2f> cur_ball_centers;
+            vector<uchar> featuresFound;
+            Mat err;
+            TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS, 20, 0.03);
+			Size winSize(31, 31);
+			if( prev_ball_centers.size() > 0)
+				calcOpticalFlowPyrLK(prev_gray, cur_gray, prev_ball_centers, cur_ball_centers, featuresFound, err, winSize, 3, termcrit, 0, 0.001);
              
-             // draw candidates
-             for (size_t i = 0; i < balls.size(); i++)
-             {
-		         cv::drawContours(result, balls, i, CV_RGB(20,150,20), 2);
-		         cv::rectangle(result, ballsBox[i], CV_RGB(0,255,0), 2);
+            // draw candidates
+            for (size_t i = 0; i < balls.size(); i++)
+            {
+		        //cv::drawContours(result, balls, i, CV_RGB(20,150,20), 2);
+		        //cv::rectangle(result, ballsBox[i], CV_RGB(0,255,0), 2);
 		         
-		         cv::Point center;
-		         center.x = ballsBox[i].x + ballsBox[i].width / 2;
-		         center.y = ballsBox[i].y + ballsBox[i].height / 2;
-		         cv::circle(result, center, 2, CV_RGB(20,150,20), -1);
+		        cv::Point2f prev_center = prev_ball_centers[i];
+		        cv::Point2f curr_center = cur_ball_centers[i];
+				
+				if(!featuresFound[i])
+		        	continue;
+		        		        	
+		        //cv::circle(result, cvPoint(prev_center.x, prev_center.y), 1, CV_RGB(20,150,20), -1, 8, 0);
+		        //cv::circle(result, cvPoint(curr_center.x, curr_center.y), 1, CV_RGB(20,150,20), -1, 8, 0);
+				cv::line( result, prev_center, curr_center, CV_RGB(255,255,0), 2);	
 		         
-		         stringstream sstr;
-		         sstr << "(" << center.x << "," << center.y << ")";
-		         cv::putText(result, sstr.str(),
-		         cv::Point(center.x + 3, center.y - 3),
-		         cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(20,150,20), 2);
-             }
+		        /*
+		        stringstream sstr;
+		        sstr << "(" << prev_center.x << "," << prev_center.y << ")";
+		        cv::putText(result, sstr.str(),
+		        cv::Point(prev_center.x + 3, prev_center.y - 3),
+		        cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(20,150,20), 2);
+		        */
+            }
              
  
-			setMouseCallback("My Window", CallBackFunc, &frameHSV);	
-            imshow("My Window", result);
+			setMouseCallback("Result Window", CallBackFunc, &frameHSV);	
+            imshow("Result Window", result);
+            
+            /* UPDATE FRAME */
+            cur_frame.copyTo( prev_frame );
             
             /* KEY INPUTS */
             int keynum = waitKey(30) & 0xFF;
@@ -275,6 +314,5 @@ int main(int argc, char** argv)
         return -1;
     }
     
-    // the camera will be deinitialized automatically in VideoCapture destructor
     return 0;
 }
