@@ -309,10 +309,10 @@ int main(int argc, char** argv)
             }
 
             // Kalman Filter Prediction
-			Mat prediction = KF.predict();
-			Point predictPt(prediction.at<float>(0),prediction.at<float>(1));
+			//Mat prediction = KF.predict();
+			//Point predictPt(prediction.at<float>(0),prediction.at<float>(1));
 			// Kalman Filter Update
-			Mat estimated = KF.correct( best_candidate );
+			//Mat estimated = KF.correct( best_candidate );
 
 			vector<Point2f> cur_ball_centers;
             vector<uchar> featuresFound;
