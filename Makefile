@@ -4,15 +4,15 @@
 
 INCLUDE = -I/usr/include -I/usr/X11/include
 LIBDIR = -L/usr/local/lib
-LIBS =  -lopencv_objdetect -lopencv_features2d -lopencv_imgproc -lopencv_highgui -lopencv_videoio -lopencv_core
+LIBS =  -lopencv_objdetect -lopencv_features2d -lopencv_imgproc -lopencv_highgui -lopencv_videoio -lopencv_core -lopencv_video
 
 CFLAGS = -g
 
 CC = g++
 
-all: ballDetector
+all: ballDetector_kalman
 
-ALL.O = ballDetector.o
+ALL.O = ballDetector_kalman.o
 
 ALL.CPP = $(subst .o,.cpp,$(ALL.O)) 
 
@@ -28,7 +28,7 @@ MAKEDEPEND = gcc -M $(CPPFLAGS) $(INCLUDE) -o $*.d $<
 %.o: %.cpp 
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o $*.o $<
 
-ballDetector: $(ALL.O)
+ballDetector_kalman: $(ALL.O)
 	$(CC) $(CFLAGS) -o $@ $(ALL.O) $(INCLUDE) $(LIBDIR) $(LIBS)
 
 clean:

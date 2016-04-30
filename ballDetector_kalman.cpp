@@ -78,18 +78,7 @@ int main(int argc, char** argv)
         int iLowV = 50;
         int iHighV = 160;
 
-        // court Color
-        int courtLowH = 0;
-        int courtHighH = 20;
-        
-        int courtLowS = 50;
-        int courtHighS = 150;
-        
-        int courtLowV = 160;
-        int courtHighV = 255;
- 
 		namedWindow("Result Window", 1);
-		//namedWindow("Court Window", 1);
 		
 		// Mat declaration
 		Mat prev_frame, prev_gray, cur_frame, cur_gray;
@@ -114,7 +103,15 @@ int main(int argc, char** argv)
 		Point lastBallCenter;
 		Point lastMotion;
 		
-		/* Kalman Filter Initialization */
+		/* Kalman Filter
+		   Kalman filter is a prediction filter. It has two stages: predict and correct.
+		   In predict stage, the filter uses the states of previous frame to predict the
+		   state of current frame. In correct stage, the filter takes in current measurement
+		   to "correct" the prediction made in prediction stage. 
+		   Here we are using an adaptive Kalman filter to do ball tracking.
+		   (noise matrix P, Q changes depending on the occulusion index)
+		*/
+		
 		KalmanFilter KF(4, 2, 0);
 		float transMatrixData[16] = {1,0,1,0, 0,1,0,1, 0,0,1,0, 0,0,0,1};
 		KF.transitionMatrix = Mat(4, 4, CV_32F, transMatrixData);
@@ -125,10 +122,10 @@ int main(int argc, char** argv)
 		KF.statePre.at<float>(1) = mp.pt.y;
 		KF.statePre.at<float>(2) = 0;
 		KF.statePre.at<float>(3) = 0;
-		setIdentity(KF.measurementMatrix);
-		setIdentity(KF.processNoiseCov, Scalar::all(1e-4));
-		setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
-		setIdentity(KF.errorCovPost, Scalar::all(.1));
+		setIdentity(KF.measurementMatrix);                        // measurement matrix H
+		setIdentity(KF.processNoiseCov, Scalar::all(1e-4));       // process noise covariance matrix Q
+		setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));   // measurement noise covariance matrix R
+		setIdentity(KF.errorCovPost, Scalar::all(.1));            // posteriori error estimate cov matrix P(t)
 
         /* start tracking */		
 		setMouseCallback("Result Window", CallBackFunc, &frameHSV);	
@@ -175,68 +172,6 @@ int main(int argc, char** argv)
             
             Mat result;
             prev_frame.copyTo( result );
-			
-			/*
-			// court mask refinement: eliminate small blocks
-			Mat buffer;
-			court_mask.copyTo( buffer );
-            cv::findContours(buffer, contours_court, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-
-	        for (size_t i = 0; i < contours_court.size(); i++)
-	        {
-	            double tmp_area = contourArea( contours_court[i] );
-	            if(tmp_area < 900.0)
-			    	drawContours(court_mask, contours_court, i, 0, CV_FILLED);		
-			}
-			bitwise_not(court_mask, court_mask);
-			court_mask.copyTo( buffer );
-            cv::findContours(buffer, contours_court, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-	        for (size_t i = 0; i < contours_court.size(); i++)
-	        {
-	            double tmp_area = contourArea( contours_court[i] );
-	            if(tmp_area < 900.0)
-			    	drawContours(court_mask, contours_court, i, 0, CV_FILLED);		
-			}
-			bitwise_not(court_mask, court_mask);
-			        	
-        	Mat canny_mask;
-        	Canny(court_mask, canny_mask, 50, 150, 3);
-			vector<Vec4i> lines;
-			HoughLinesP(canny_mask, lines, 1, CV_PI/180, 80, 30, 10);
-			
-			Point l_top( mask.cols/2, mask.rows );
-			Point l_bot( mask.cols/2, mask.rows );
-			
-			for( size_t i = 0; i < lines.size(); i++ )
-			{
-				Point p1 = Point(lines[i][0], lines[i][1]);
-				Point p2 = Point(lines[i][2], lines[i][3]);
-					
-				if(p1.y < l_top.y)
-				{
-					l_top = p1;
-					l_bot = p2;
-				}
-				if(p2.y < l_top.y)
-				{
-					l_top = p2;
-					l_bot = p1;
-				}
-			}			
-			// stretch the line
-			Point v_diff = l_top - l_bot;
-			Point p_left, p_right;
-
-
-			int left_t  = l_top.x / v_diff.x;
-			int right_t = (mask.cols - l_top.x) / v_diff.x;
-
-			p_left = l_top - v_diff * left_t;
-			p_right = l_top + v_diff * right_t;
-			 	
-			line( court_mask, p_left, p_right, Scalar(128), 2, 8 );
-        	imshow("Court Window", court_mask);
-			*/			
 			
             // sieves
             vector< vector<cv::Point> > balls;
@@ -296,7 +231,7 @@ int main(int argc, char** argv)
 					uchar center_v = mask.at<uchar>( center );*
 					if(center_v != 1)
 						continue;
-				  	*/
+				  	*/ 
 				  	 
 				  	// ball-on-court sieve: not useful in basketball =( 
 				  	//if(court_mask.at<uchar>(center) != 255)
