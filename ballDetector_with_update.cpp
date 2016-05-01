@@ -70,10 +70,10 @@ int main(int argc, char** argv)
         
         // Basketball Color
         int iLowH = 150;
-        int iHighH = 6;
+        int iHighH = 16;
         
         int iLowS = 70;
-        int iHighS = 130;
+        int iHighS = 170;
         
         int iLowV = 70;
         int iHighV = 150;
@@ -156,39 +156,41 @@ int main(int argc, char** argv)
             mask = mask1 + mask2;
             
             // morphological opening (remove small objects from the foreground)
-            erode(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(6, 6)) );
-            dilate(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(6, 6)) );
+            erode(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(7, 7)) );
+            dilate(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(7, 7)) );
             
             // morphological closing (fill small holes in the foreground)
-            dilate(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(6, 6)) );
-            erode(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(6, 6)) );
+            dilate(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(7, 7)) );
+            erode(mask, mask, getStructuringElement(MORPH_ELLIPSE, Size(7, 7)) );
             
             /*
              * Method:  HoughCircles
              * creating circles and radius.
              */
             // Basketball Color for Hough circle
-            int iLowH = 160;
-            int iHighH = 18;
             
-            int iLowS = 80;
-            int iHighS = 255;
+            int iLowH = 150;
+            int iHighH = 16;
+            
+            int iLowS = 70;
+            int iHighS = 165;
             
             int iLowV = 70;
-            int iHighV = 160;
+            int iHighV = 150;
+            
             Mat mask1_circle, mask2_circle, mask_circle, frameHSV_circle, frameFiltered,frameGray2;
             cvtColor(frame_blurred, frameHSV_circle, COLOR_BGR2HSV);
             inRange(frameHSV_circle, Scalar(2, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), mask1_circle);
             inRange(frameHSV_circle, Scalar(iLowH, iLowS, iLowV),Scalar(180, iHighS, iHighV), mask2_circle);
             mask_circle = mask1_circle + mask2_circle;
-            erode(mask_circle, mask_circle, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
-            dilate(mask_circle, mask_circle, getStructuringElement(MORPH_ELLIPSE, Size(10, 10)) );
+            erode(mask_circle, mask_circle, getStructuringElement(MORPH_ELLIPSE, Size(7, 7)) );
+            dilate(mask_circle, mask_circle, getStructuringElement(MORPH_ELLIPSE, Size(7, 7)) );
             
             prev_frame.copyTo( frameFiltered, mask_circle );
             cv::cvtColor( frameFiltered, frameGray2, CV_BGR2GRAY );
             vector<cv::Vec3f> circles;
             cv::GaussianBlur(frameGray2, frameGray2, cv::Size(5, 5), 3.0, 3.0);
-            HoughCircles( frameGray2, circles, CV_HOUGH_GRADIENT, 1, frameGray2.rows/8, 100, 18, 5,90);
+            HoughCircles( frameGray2, circles, CV_HOUGH_GRADIENT, 1, frameGray2.rows/8, 80, 16, 5,400);
             
             /*
              * STAGE 2: contour generation
@@ -385,29 +387,36 @@ int main(int argc, char** argv)
 
                     if( frame_num >2 && radius<40 && dis_center<radius+3 && mp.pt.x > ballsBox[i].x && mp.pt.x < ballsBox[i].x + ballsBox[i].width && mp.pt.y > ballsBox[i].y && mp.pt.y < ballsBox[i].y + ballsBox[i].height){
                         circle_in_HSV=1;
+                        Point motion = cur_ball_centers_circle[circle_i] - prev_ball_centers_circle[circle_i];
                         mp.pt = Point2f(cur_ball_centers_circle[circle_i].x, cur_ball_centers_circle[circle_i].y);
-                        cout<<"update!!"<<endl;
+                        cout<<mp.pt<<endl;
+                        cout<<"status 1"<<endl;
+                        ball_found = true;
                     }
+                    if(radius<40){
                     stringstream sstr;
                     sstr << "(" << center2.x << "," << center2.y << ")";
                     cv::putText(result, sstr.str(),
                     cv::Point(center2.x + 3, center2.y - 3),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(20,150,20), 2);
-                    cv::circle( result, center2, radius, Scalar(12,12,255), 2 );
+                        cv::circle( result, center2, radius, Scalar(12,12,255), 2 );}
                 }
                 
                 // see if any candidates contains out ball
-                if( circle_in_HSV==0 && mp.pt.x > ballsBox[i].x && mp.pt.x < ballsBox[i].x + ballsBox[i].width && mp.pt.y > ballsBox[i].y && mp.pt.y < ballsBox[i].y + ballsBox[i].height)
+                if( circle_in_HSV==0 && mp.pt.x > ballsBox[i].x && mp.pt.x < ballsBox[i].x + ballsBox[i].width && mp.pt.y > ballsBox[i].y && mp.pt.y < ballsBox[i].y + ballsBox[i].height && ballsBox[i].area() < 1000 && ballsBox[i].area() > 200)
                 {
                     cv::rectangle(result, ballsBox[i], CV_RGB(0,255,0), 2);
                     Point motion = cur_ball_centers[i] - prev_ball_centers[i];
                     // update points and lastMotion
                     
                     float ratio = (float) ballsBox[i].width / (float) ballsBox[i].height;
-                    if( ballsBox[i].area() < 1000 && ratio>0.75 && ratio<1.25 ){
+                    if( ballsBox[i].area() < 1000 && ratio>0.7 && ratio<1.35 && ballsBox[i].area() > 200){
                         mp.pt = Point2f(center.x, center.y);
+                        cout<<"status 2"<<endl;
+                        cout<<"AREA:"<<ballsBox[i].area()<<endl;
                     }else{
                         mp.pt = Point2f(mp.pt.x+motion.x, mp.pt.y+motion.y);
+                        cout<<"status 3"<<endl;
                     }
                     // TODO replace with predicted points of kalman filter here.
                     lastMotion = motion;
@@ -427,8 +436,9 @@ int main(int argc, char** argv)
             // if ball is not found, search for the closest ball candidate within a distance.
             if(!ball_found)
             {
-                int search_distance_threshold = 15*15;
+                int search_distance_threshold = 35*35;
                 int closest_dist      = 1500;
+//                int closest_dist2      = 2000;
                 int closest_area_diff = 10000;
                 int best_i = 0;
                 
@@ -436,13 +446,17 @@ int main(int argc, char** argv)
                 {
                     int diff_x = prev_ball_centers[i].x - mp.pt.x;
                     int diff_y = prev_ball_centers[i].y - mp.pt.y;
+                    int area_threshold_high = 100*100;
+                    int area_threshold_low = 15*15;
                     int distance  = diff_x * diff_x + diff_y * diff_y;
                     int area_diff = abs(ballsBox[i].area()-lastBallBox.area());
                     float ratio = (float) ballsBox[i].width / (float) ballsBox[i].height;
+//                    if(distance<closest_dist2){
+//                        closest_dist2=distance;
+//                        best_i = i;}
                     // if distance is small
                     if( distance < search_distance_threshold &&
-                       distance < closest_dist && 
-                       area_diff < closest_area_diff && ratio>0.75 && ratio<1.25)
+                       distance < closest_dist && ratio>0.5 && ratio<2 && ballsBox[i].area()<area_threshold_high && ballsBox[i].area()>area_threshold_low)
                     {
                         closest_dist      = distance;
                         closest_area_diff =  area_diff;
@@ -450,26 +464,18 @@ int main(int argc, char** argv)
                         ball_found = true;
                     }				
                 }
+//                cout<<"ballsBox[i].area()"<<ballsBox[best_i].area()<<endl;
+//                cout<<"Ratio"<<(float) ballsBox[best_i].width / (float) ballsBox[best_i].height<<endl;
                 
                 if(ball_found)
                 {
                     // reset mp.pt
                     cout<<"here! yello"<<endl;
-                    cv::rectangle(result, ballsBox[best_i], CV_RGB(255,255,0), 2);
-                    Point motion = cur_ball_centers[best_i] - prev_ball_centers[best_i];
-                    mp.pt = Point2f(cur_ball_centers[best_i].x, cur_ball_centers[best_i].y);
-//                    mp.pt = cur_ball_centers[best_i];
-                }
-                else
-                {
-                    // if ball still not found... stay at the same direction
-                    circle(result, mp.pt, 5, CV_RGB(255,255,255), 2);
-                    mp.pt = lastBallCenter + lastMotion;
                     
-                    int search_distance_threshold = 60*60;
-                    int closest_dist      = 1500;
-                    int best_i = 0;
-                    bool ball_found = false;
+                    int search_distance_threshold = 80*80;
+                    int closest_dist = 1500;
+                    int best_circle_i = 0;
+                    bool circle_found = false;
                     for( size_t circle_i = 0; circle_i < circles.size(); circle_i++ )
                     {
                         int diff_x = prev_ball_centers_circle[circle_i].x - mp.pt.x;
@@ -478,15 +484,56 @@ int main(int argc, char** argv)
                         if( distance < search_distance_threshold)
                         {
                             closest_dist      = distance;
+                            best_circle_i = circle_i;
+                            circle_found = true;
+                        }
+                    }
+                    if(circle_found){
+                        cv::circle( result, cur_ball_centers_circle[best_circle_i], 3, Scalar(255,255,0), 2 );
+                        mp.pt = Point2f(cur_ball_centers_circle[best_circle_i].x, cur_ball_centers_circle[best_circle_i].y);
+                        cout<<"status 4"<<endl;
+                    } else{
+                        cv::rectangle(result, ballsBox[best_i], CV_RGB(255,255,0), 2);
+                        Point motion = cur_ball_centers[best_i] - prev_ball_centers[best_i];
+                        mp.pt = Point2f(cur_ball_centers[best_i].x, cur_ball_centers[best_i].y);
+                        cout<<"status 5"<<endl;
+                    }
+
+                }
+                else
+                {
+                    // if ball still not found... stay at the same direction
+                    circle(result, mp.pt, 5, CV_RGB(255,255,255), 2);
+                    
+                    int search_distance_threshold = 80*80;
+                    int closest_dist      = 1500;
+                    int best_i = 0;
+                    bool ball_found = false;
+                    for( size_t circle_i = 0; circle_i < circles.size(); circle_i++ )
+                    {
+                        int radius = cvRound(circles[circle_i][2]);
+                        int diff_x = prev_ball_centers_circle[circle_i].x - mp.pt.x;
+                        int diff_y = prev_ball_centers_circle[circle_i].y - mp.pt.y;
+                        int distance  = diff_x * diff_x + diff_y * diff_y;
+                        if( distance < search_distance_threshold && radius>10 && radius<35)
+                        {
+                            closest_dist      = distance;
                             best_i = circle_i;
                             ball_found = true;
+                            cout<<"radius"<<radius<<endl;
                         }
                     }
                     if(ball_found){
                         cv::rectangle(result, ballsBox[best_i], CV_RGB(255,255,0), 2);
+                        Point motion = cur_ball_centers_circle[best_i] - prev_ball_centers_circle[best_i];
                         mp.pt = Point2f(cur_ball_centers_circle[best_i].x, cur_ball_centers_circle[best_i].y);
+                        cout<<mp.pt<<endl;
+                        cout<<"status 6"<<endl;
                     }else{
-                        mp.pt = lastBallCenter + lastMotion;}
+//                        mp.pt = lastBallCenter + lastMotion;
+                        cout<<"status 7"<<endl;
+                        cout<<"lastBallCenter"<<lastBallCenter<<endl;
+                        cout<<"lastMotion"<<lastMotion<<endl;}
                     
                 }
             }
