@@ -43,7 +43,17 @@ void BallSelectFunc(int event, int x, int y, int flags, void* userdata)
 }
 
 // Basketball Color 
-int iLowH = 170;
+int iLowH = 180;
+int iHighH = 20;
+
+int iLowS =  90;
+int iHighS = 200;
+
+int iLowV = 75;
+int iHighV = 140;
+
+/*
+int iLowH = 0;
 int iHighH = 20;
 
 int iLowS = 50;
@@ -51,6 +61,7 @@ int iHighS = 255;
 
 int iLowV = 50;
 int iHighV = 160;
+*/
 
 Mat getMask(Mat &frameHSV)
 {
@@ -101,7 +112,7 @@ int main(int argc, char** argv)
 		
 		// Mat declaration
 		Mat prev_frame, prev_gray, cur_frame, cur_gray;
-        Mat frame_blurred, frameHSV, frameGray;
+        Mat frame_blurred, frameHSV;
         
         // take the first frame
         inputVideo >> prev_frame;
@@ -166,10 +177,13 @@ int main(int argc, char** argv)
 		setIdentity(KF.errorCovPre);                              // priori error estimate covariance matrix P'(t)	
 		setIdentity(KF.errorCovPost, Scalar::all(.1));            // posteriori error estimate cov matrix P(t)
 	
-		/* Some extra params */
+		/* params related to previous frames */
 		Rect    prev_box;
 		Point2f prev_motion;
-		
+		Point   noFoundStartPt;
+        vector<cv::Point2f> prev_ball_centers;
+        int noFoundCount = 0;
+        
         /* start tracking */		
 		setMouseCallback("Result Window", CallBackFunc, &frameHSV);			
         for(int frame_num=1; frame_num < inputVideo.get(CAP_PROP_FRAME_COUNT); ++frame_num)
@@ -190,6 +204,16 @@ int main(int argc, char** argv)
             // mask generation
             Mat mask;
 			mask = getMask(frameHSV);
+
+			// Hough Transform	
+			/*
+			Mat frame_filtered, frame_filtered_gray;
+            cur_frame.copyTo( frame_filtered, mask );
+            cv::cvtColor( frame_filtered, frame_filtered_gray, CV_BGR2GRAY );
+            vector<cv::Vec3f> circles;
+            cv::GaussianBlur(frame_filtered_gray, frame_filtered_gray, cv::Size(5, 5), 3.0, 3.0);
+            HoughCircles( frame_filtered_gray, circles, CV_HOUGH_GRADIENT, 1, frame_filtered_gray.rows/8, 120, 18, 5,300);
+			*/
 			
             // contour generation
             vector< vector<cv::Point> > contours_ball;
@@ -198,6 +222,15 @@ int main(int argc, char** argv)
             Mat result;
             cur_frame.copyTo( result );
 
+			// OpticalFlow
+            vector<Point2f> optFlow_ball_centers;
+            vector<uchar> featuresFound;
+            Mat err;
+            TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS, 20, 0.03);
+            Size winSize(31, 31);
+            if( prev_ball_centers.size() > 0 )
+                calcOpticalFlowPyrLK(prev_gray, cur_gray, prev_ball_centers, optFlow_ball_centers, featuresFound, err, winSize, 0, termcrit, 0, 0.001);    
+            
             // Kalman Filter: Extract previous point & prediction point
             Point2f statePt   = Point( KF.statePost.at<float>(0), KF.statePost.at<float>(1) );  
             Mat prediction    = KF.predict();  
@@ -205,17 +238,22 @@ int main(int argc, char** argv)
 
 		    cout << "state:" << statePt << endl;
 		    cout << "predict:" << predictPt << endl;
+			cout << "prev_motion: " << prev_motion.x * prev_motion.x + prev_motion.y * prev_motion.y << endl;
             
             // Search current frame for good candidate measurements
+            vector<Point2f>   cur_contour_centers;
             vector<cv::Point> best_ball_contour;
             Point2f best_ball_center;
             Rect    best_ball_box;
-			//int     search_distance_threshold = prev_motion.x * prev_motion.x + prev_motion.y * prev_motion.y;
-			int     closest_dist = 10000;
 			bool 	ballFound = false;
 			
+			// TODO dynamic search range
+			int closest_dist = (prev_motion.x * prev_motion.x + prev_motion.y * prev_motion.y) * 16;
+	    	if(closest_dist == 0) closest_dist = 10000;
+	    	circle( result, predictPt, sqrt(closest_dist), CV_RGB(255,255,0), 2 );
+			
             for (size_t i = 0; i < contours_ball.size(); i++)
-			{
+			{  
 			    drawContours(result, contours_ball, i, CV_RGB(255,0,0), 1);  // draw the area
 			     
 		        cv::Rect bBox;
@@ -224,6 +262,8 @@ int main(int argc, char** argv)
 			    center.x = bBox.x + bBox.width / 2;
 			    center.y = bBox.y + bBox.height / 2;		         
 
+				cur_contour_centers.push_back(center);
+				
 		        // If we find a contour that includes our prediction point,
 		        // it's the best choice then.
 				// If we cannot found a contour to contain prediction point, 
@@ -233,7 +273,7 @@ int main(int argc, char** argv)
 				{
 					best_ball_contour = contours_ball[i];
 					best_ball_center  = center;
-					best_ball_box     = bBox;		
+					best_ball_box     = bBox;
 					ballFound = true;
 					break;
 				}
@@ -242,7 +282,7 @@ int main(int argc, char** argv)
 		        	int diff_x = center.x - predictPt.x;
 		        	int diff_y = center.y - predictPt.y;
 		        	int distance  = diff_x * diff_x + diff_y * diff_y;
-					// if distance is close enough
+					// if distance is close enough & area not too small
 					if( distance < closest_dist )
 					{
 						best_ball_contour = contours_ball[i];
@@ -272,6 +312,7 @@ int main(int argc, char** argv)
 					setIdentity(KF.processNoiseCov, Scalar::all(0.0));      // Q = 0
 					setIdentity(KF.measurementNoiseCov, Scalar::all(1e10)); // R = infinite			    				
 				}
+				
 				// correction
 			    measurement.at<float>(0) = best_ball_center.x;  
 				measurement.at<float>(1) = best_ball_center.y;  
@@ -281,94 +322,97 @@ int main(int argc, char** argv)
 				cout << "estimated:" << estimated.at<float>(0) << ", " << estimated.at<float>(1) << endl;
           	
 				// remember to update prev parameters
-				prev_box    = best_ball_box;
-				prev_motion = best_ball_center - statePt;
-		    }
+				prev_box     = best_ball_box;
+				prev_motion  = best_ball_center - statePt;
+				noFoundCount = 0;
+		    } 
 		    else
 		    {
-				// WHAT IF NOTHING IS FOUND? Have no idea right now.
-				cout << "NOTHING IS FOUND" << endl;
+				// TODO
+				if( noFoundCount == 0 )
+				{
+					noFoundStartPt = statePt;			
+				}
+    		    circle( result, noFoundStartPt, 5, CV_RGB(255,255,255), 2 );
+				
+				// if Kalman filter failed... we "CORRECT" the frame
+				if(noFoundCount > 5)
+				{
+				    for( size_t i = 0; i < contours_ball.size(); i++ )
+				    {                
+				    	bool containOptFlow = false;
+						for (size_t j = 0; j < optFlow_ball_centers.size(); j++)
+						{
+							if( pointPolygonTest( contours_ball[i], optFlow_ball_centers[j], false ) >= 0)
+							{
+								containOptFlow = true;
+								break;
+							}
+						}			   
+			
+						if(containOptFlow)
+							continue;
+						else
+						{
+							cv::Rect bBox;
+							bBox = cv::boundingRect(contours_ball[i]);
+							Point center;
+							center.x = bBox.x + bBox.width / 2;
+							center.y = bBox.y + bBox.height / 2;		         
+
+							best_ball_center = center;
+							best_ball_box    = bBox;
+							ballFound = true;							
+							break;
+						}
+				    }
+				    
+				    if(ballFound)
+				    {
+	    			    //measurement.at<float>(0) = best_ball_center.x;  
+						//measurement.at<float>(1) = best_ball_center.y;  
+	    				//Mat estimated = KF.correct(measurement);	
+						KF.statePost.at<float>(0) = best_ball_center.x;
+						KF.statePost.at<float>(1) = best_ball_center.y;
+						KF.statePost.at<float>(2) = 0;
+						KF.statePost.at<float>(3) = 0;
+
+						prev_box     = best_ball_box;
+						prev_motion  = Point2f(0, 0);
+				    	noFoundCount = 0;
+				    }
+				    else {
+				    	cout << "UNABLE TO CORRECT..." << endl;
+				    }
+				}
+				noFoundCount++;
+				cout << "NO FOUND: " << noFoundCount << endl;
 		    }
 		    
 		    // rendering result
-			line( result, statePt, predictPt, CV_RGB(255,0,255), 2 );			         
+			line( result, statePt, predictPt, CV_RGB(255,0,255), 2 );	
+	    	circle( result, predictPt, 2, CV_RGB(255,0,255), 2 );	         
 		    circle( result, best_ball_center, 2, CV_RGB(255,255,255), 2 );
-		    rectangle( result, best_ball_box, CV_RGB(255,255,0), 2 );
-			
-			/*
-			vector<Point2f> cur_ball_centers;
-            vector<uchar> featuresFound;
-            Mat err;
-            TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS, 20, 0.03);
-			Size winSize(31, 31);
-			if( prev_ball_centers.size() > 0 )
-				calcOpticalFlowPyrLK(prev_gray, cur_gray, prev_ball_centers, cur_ball_centers, featuresFound, err, winSize, 3, termcrit, 0, 0.001);
-			
-			
-            bool ball_found = false;
-            for (size_t i = 0; i < balls.size(); i++)
-            {
-            	// see if any candidates contains out ball
-				if( mp.pt.x > ballsBox[i].x && mp.pt.x < ballsBox[i].x + ballsBox[i].width && 
-				    mp.pt.y > ballsBox[i].y && mp.pt.y < ballsBox[i].y + ballsBox[i].height)
-				{
-			        cv::rectangle(result, ballsBox[i], CV_RGB(0,255,0), 2);
-			        Point motion = cur_ball_centers[i] - prev_ball_centers[i];
-			        // update points and lastMotion
-			        mp.pt = Point2f(mp.pt.x+motion.x, mp.pt.y+motion.y);  // TODO replace with predicted points of kalman filter here.
-			        lastMotion = motion;
-			        ball_found = true;
-				// draw optical flow
-				}
-				
-				if(!featuresFound[i])
-	        		continue;
-		         
-		        cv::Point2f prev_center = prev_ball_centers[i];
-		        cv::Point2f curr_center = cur_ball_centers[i];		        		        	
-				cv::line( result, prev_center, curr_center, CV_RGB(255,255,0), 2);			         
-            }
-            
-            // if ball is not found, search for the closest ball candidate within a distance.
-			if(!ball_found)
-			{
-				int search_distance_threshold = 60*60;
-				int closest_dist      = 10000;
-				int closest_area_diff = 10000;
-				int best_i = 0;
-				
-		        for (size_t i = 0; i < balls.size(); i++)
-		        {
-		        	int diff_x = prev_ball_centers[i].x - mp.pt.x;
-		        	int diff_y = prev_ball_centers[i].y - mp.pt.y;
-		        	int distance  = diff_x * diff_x + diff_y * diff_y;
-					int area_diff = abs(ballsBox[i].area()-lastBallBox.area());
-					// if distance is small
-					if( distance < search_distance_threshold &&
-					    distance < closest_dist && 
-					    area_diff < closest_area_diff )
-					{
-						closest_dist      = distance;
-						closest_area_diff =  area_diff;
-						best_i = i;
-						ball_found = true;
-					}				
-		        }
+		    rectangle( result, best_ball_box, CV_RGB(0,255,0), 2 );
 
-		        if(ball_found)
-				{
-					// reset mp.pt
-				    cv::rectangle(result, ballsBox[best_i], CV_RGB(255,255,0), 2);
-			        mp.pt = cur_ball_centers[best_i];
-			    }
-			    else
-				{
-					// if ball still not found... stay at the same direction
-				    circle(result, mp.pt, 5, CV_RGB(255,255,255), 2);
-				    mp.pt = lastBallCenter + lastMotion;
-				}
-			}*/
-			   
+			// Optical Flow   
+            for (size_t i = 0; i < optFlow_ball_centers.size(); i++)
+			{
+				line( result, prev_ball_centers[i], optFlow_ball_centers[i], CV_RGB(120,70,255), 2 );
+		    	circle( result, optFlow_ball_centers[i], 2, CV_RGB(120,70,255), 2 );
+            }			   
+			
+			// Hough
+			/*
+            for( size_t circle_i = 0; circle_i < circles.size(); circle_i++ )
+            {                
+                Point center(cvRound(circles[circle_i][0]), cvRound(circles[circle_i][1]));
+                int radius = cvRound(circles[circle_i][2]);
+                circle( result, center, radius, Scalar(12,12,255), 2 );
+            }			
+			*/
+			prev_ball_centers = cur_contour_centers;
+			
 		    imshow("Result Window", result);
             
             /* UPDATE FRAME */
