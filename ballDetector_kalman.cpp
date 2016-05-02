@@ -44,9 +44,9 @@ void BallSelectFunc(int event, int x, int y, int flags, void* userdata)
 
 // Basketball Color 
 int iLowH = 180;
-int iHighH = 20;
+int iHighH = 16;
 
-int iLowS =  90;
+int iLowS =  95;
 int iHighS = 200;
 
 int iLowV = 75;
@@ -205,15 +205,13 @@ int main(int argc, char** argv)
             Mat mask;
 			mask = getMask(frameHSV);
 
-			// Hough Transform	
-			/*
+			// Hough Transform
 			Mat frame_filtered, frame_filtered_gray;
             cur_frame.copyTo( frame_filtered, mask );
             cv::cvtColor( frame_filtered, frame_filtered_gray, CV_BGR2GRAY );
             vector<cv::Vec3f> circles;
             cv::GaussianBlur(frame_filtered_gray, frame_filtered_gray, cv::Size(5, 5), 3.0, 3.0);
             HoughCircles( frame_filtered_gray, circles, CV_HOUGH_GRADIENT, 1, frame_filtered_gray.rows/8, 120, 18, 5,300);
-			*/
 			
             // contour generation
             vector< vector<cv::Point> > contours_ball;
@@ -238,7 +236,7 @@ int main(int argc, char** argv)
 
 		    cout << "state:" << statePt << endl;
 		    cout << "predict:" << predictPt << endl;
-			cout << "prev_motion: " << prev_motion.x * prev_motion.x + prev_motion.y * prev_motion.y << endl;
+			cout << "prev_motion: " << prev_motion << " sqr: " << prev_motion.x * prev_motion.x + prev_motion.y * prev_motion.y << endl;
             
             // Search current frame for good candidate measurements
             vector<Point2f>   cur_contour_centers;
@@ -250,20 +248,43 @@ int main(int argc, char** argv)
 			// TODO dynamic search range
 			int closest_dist = (prev_motion.x * prev_motion.x + prev_motion.y * prev_motion.y) * 16;
 	    	if(closest_dist == 0) closest_dist = 10000;
-	    	circle( result, predictPt, sqrt(closest_dist), CV_RGB(255,255,0), 2 );
+	    	// circle( result, predictPt, sqrt(closest_dist), CV_RGB(255,255,0), 2 );
 			
             for (size_t i = 0; i < contours_ball.size(); i++)
-			{  
+			{  			    
 			    drawContours(result, contours_ball, i, CV_RGB(255,0,0), 1);  // draw the area
 			     
 		        cv::Rect bBox;
 		        bBox = cv::boundingRect(contours_ball[i]);
-			    Point center;
+			    Point2f center;
 			    center.x = bBox.x + bBox.width / 2;
 			    center.y = bBox.y + bBox.height / 2;		         
 
 				cur_contour_centers.push_back(center);
 				
+				// find corresponding optical flow center
+				float optFlow_dist = 2500;
+				int   best_j = -1;
+				for( size_t j=0; j < optFlow_ball_centers.size(); ++j )
+				{
+		        	float diff_x = center.x - optFlow_ball_centers[j].x;
+		        	float diff_y = center.y - optFlow_ball_centers[j].y;
+		        	float distance  = diff_x * diff_x + diff_y * diff_y;
+					if(distance < optFlow_dist)
+					{
+						distance = optFlow_dist;
+						best_j   = j;
+					}
+			    }
+
+				Point2f optPredictPt = center;
+				if(best_j != -1)
+				{
+					Point2f motion = optFlow_ball_centers[best_j] - prev_ball_centers[best_j];
+					optPredictPt = center + motion;
+					line( result, optPredictPt, center, CV_RGB(190,60,70), 2 );
+				}
+					
 		        // If we find a contour that includes our prediction point,
 		        // it's the best choice then.
 				// If we cannot found a contour to contain prediction point, 
@@ -279,10 +300,21 @@ int main(int argc, char** argv)
 				}
 				else 
 				{
-		        	int diff_x = center.x - predictPt.x;
-		        	int diff_y = center.y - predictPt.y;
-		        	int distance  = diff_x * diff_x + diff_y * diff_y;
-					// if distance is close enough & area not too small
+		        	float diff_x = center.x - predictPt.x;
+		        	float diff_y = center.y - predictPt.y;
+		        	float distance  = diff_x * diff_x + diff_y * diff_y;
+					
+					//if( bBox.area() < 200 )
+					//	continue;
+					/*
+					stringstream sstr;
+					sstr << "(dot= " << dot_product << ")";
+					cv::putText(result, sstr.str(),
+					cv::Point(center.x + 3, center.y - 3),
+					cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(0,255,100), 2);						
+					*/
+					
+					// if distance is close enough
 					if( distance < closest_dist )
 					{
 						best_ball_contour = contours_ball[i];
@@ -311,6 +343,7 @@ int main(int argc, char** argv)
 				{
 					setIdentity(KF.processNoiseCov, Scalar::all(0.0));      // Q = 0
 					setIdentity(KF.measurementNoiseCov, Scalar::all(1e10)); // R = infinite			    				
+					cout << "NON_CONFIDENTIAL_MEASUREMENT\n";
 				}
 				
 				// correction
@@ -329,41 +362,36 @@ int main(int argc, char** argv)
 		    else
 		    {
 				// TODO
+				prev_motion = predictPt - statePt;
+				
 				if( noFoundCount == 0 )
 				{
-					noFoundStartPt = statePt;			
+					noFoundStartPt = statePt;
 				}
     		    circle( result, noFoundStartPt, 5, CV_RGB(255,255,255), 2 );
 				
 				// if Kalman filter failed... we "CORRECT" the frame
 				if(noFoundCount > 5)
 				{
+					closest_dist = 1e8;
 				    for( size_t i = 0; i < contours_ball.size(); i++ )
 				    {                
-				    	bool containOptFlow = false;
-						for (size_t j = 0; j < optFlow_ball_centers.size(); j++)
-						{
-							if( pointPolygonTest( contours_ball[i], optFlow_ball_centers[j], false ) >= 0)
-							{
-								containOptFlow = true;
-								break;
-							}
-						}			   
-			
-						if(containOptFlow)
-							continue;
-						else
-						{
-							cv::Rect bBox;
-							bBox = cv::boundingRect(contours_ball[i]);
-							Point center;
-							center.x = bBox.x + bBox.width / 2;
-							center.y = bBox.y + bBox.height / 2;		         
+						cv::Rect bBox;
+						bBox = cv::boundingRect(contours_ball[i]);
+						Point center;
+						center.x = bBox.x + bBox.width / 2;
+						center.y = bBox.y + bBox.height / 2;		         
+			    	
+				    	int diff_x = center.x - noFoundStartPt.x;
+				    	int diff_y = center.y - noFoundStartPt.y;
+				    	int distance  = diff_x * diff_x + diff_y * diff_y;
 
+						if( distance < closest_dist)
+						{
+							closest_dist = distance;
 							best_ball_center = center;
 							best_ball_box    = bBox;
-							ballFound = true;							
-							break;
+							ballFound = true;						
 						}
 				    }
 				    
@@ -396,21 +424,22 @@ int main(int argc, char** argv)
 		    rectangle( result, best_ball_box, CV_RGB(0,255,0), 2 );
 
 			// Optical Flow   
+            /*
             for (size_t i = 0; i < optFlow_ball_centers.size(); i++)
 			{
 				line( result, prev_ball_centers[i], optFlow_ball_centers[i], CV_RGB(120,70,255), 2 );
 		    	circle( result, optFlow_ball_centers[i], 2, CV_RGB(120,70,255), 2 );
             }			   
+			*/
 			
 			// Hough
-			/*
             for( size_t circle_i = 0; circle_i < circles.size(); circle_i++ )
             {                
                 Point center(cvRound(circles[circle_i][0]), cvRound(circles[circle_i][1]));
                 int radius = cvRound(circles[circle_i][2]);
                 circle( result, center, radius, Scalar(12,12,255), 2 );
             }			
-			*/
+			
 			prev_ball_centers = cur_contour_centers;
 			
 		    imshow("Result Window", result);
