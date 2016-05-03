@@ -276,7 +276,8 @@ int main(int argc, char** argv)
 						best_j   = j;
 					}
 			    }
-
+			    
+				/* TODO
 				Point2f optPredictPt = center;
 				if(best_j != -1)
 				{
@@ -284,6 +285,7 @@ int main(int argc, char** argv)
 					optPredictPt = center + motion;
 					line( result, optPredictPt, center, CV_RGB(190,60,70), 2 );
 				}
+				*/
 					
 		        // If we find a contour that includes our prediction point,
 		        // it's the best choice then.
