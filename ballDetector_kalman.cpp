@@ -116,7 +116,7 @@ int main(int argc, char** argv)
         
         // take the first frame
         inputVideo >> prev_frame;
-		
+				
         /* manual ball selection */
         MouseParams mp;
         prev_frame.copyTo( mp.ori ); 
@@ -130,6 +130,7 @@ int main(int argc, char** argv)
         	imshow("Result Window", mp.img);
 		}
 		
+		outputVideo.write( mp.img );
 		/* Kalman Filter
 		   Kalman filter is a prediction-correction filter. It has two stages: predict and correct.
 		   In predict stage, the filter uses the states of previous frame to predict the
@@ -246,12 +247,12 @@ int main(int argc, char** argv)
 			bool 	ballFound = false;
 			
 			// TODO dynamic search range
-			int closest_dist = (prev_motion.x * prev_motion.x + prev_motion.y * prev_motion.y) * 16;
+			int closest_dist = (prev_motion.x * prev_motion.x + prev_motion.y * prev_motion.y) * 15;
 	    	if(closest_dist == 0) closest_dist = 10000;
-	    	// circle( result, predictPt, sqrt(closest_dist), CV_RGB(255,255,0), 2 );
+	    	//circle( result, predictPt, sqrt(closest_dist), CV_RGB(255,255,0), 2 );
 			
             for (size_t i = 0; i < contours_ball.size(); i++)
-			{  			    
+			{
 			    drawContours(result, contours_ball, i, CV_RGB(255,0,0), 1);  // draw the area
 			     
 		        cv::Rect bBox;
@@ -316,6 +317,9 @@ int main(int argc, char** argv)
 					cv::FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(0,255,100), 2);						
 					*/
 					
+					//if(bBox.area() < 250)
+					//	continue;
+											
 					// if distance is close enough
 					if( distance < closest_dist )
 					{
@@ -373,26 +377,31 @@ int main(int argc, char** argv)
     		    circle( result, noFoundStartPt, 5, CV_RGB(255,255,255), 2 );
 				
 				// if Kalman filter failed... we "CORRECT" the frame
-				if(noFoundCount > 5)
+				if(noFoundCount > 1)
 				{
 					closest_dist = 1e8;
-				    for( size_t i = 0; i < contours_ball.size(); i++ )
+				    for( size_t i = 0; i < circles.size(); i++ )
 				    {                
+				        Point center_circle(cvRound(circles[i][0]), cvRound(circles[i][1]));
+				        int radius_circle = cvRound(circles[i][2]);
+						if( radius_circle < 6 )
+							continue;
+						/*	
 						cv::Rect bBox;
-						bBox = cv::boundingRect(contours_ball[i]);
+						bBox = cv::boundingRect(circles[i]);
 						Point center;
 						center.x = bBox.x + bBox.width / 2;
 						center.y = bBox.y + bBox.height / 2;		         
-			    	
-				    	int diff_x = center.x - noFoundStartPt.x;
-				    	int diff_y = center.y - noFoundStartPt.y;
+			    		*/
+				    	int diff_x = center_circle.x - noFoundStartPt.x;
+				    	int diff_y = center_circle.y - noFoundStartPt.y;
 				    	int distance  = diff_x * diff_x + diff_y * diff_y;
 
 						if( distance < closest_dist)
 						{
 							closest_dist = distance;
-							best_ball_center = center;
-							best_ball_box    = bBox;
+							best_ball_center = center_circle;
+							//best_ball_box    = bBox;
 							ballFound = true;						
 						}
 				    }
@@ -435,17 +444,20 @@ int main(int argc, char** argv)
 			*/
 			
 			// Hough
+            /*
             for( size_t circle_i = 0; circle_i < circles.size(); circle_i++ )
             {                
                 Point center(cvRound(circles[circle_i][0]), cvRound(circles[circle_i][1]));
                 int radius = cvRound(circles[circle_i][2]);
                 circle( result, center, radius, Scalar(12,12,255), 2 );
             }			
+			*/
 			
 			prev_ball_centers = cur_contour_centers;
 			
 		    imshow("Result Window", result);
-            
+ 			outputVideo.write( result );
+          
             /* UPDATE FRAME */
             cur_frame.copyTo( prev_frame );
             
