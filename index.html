@@ -42,13 +42,13 @@ In the following section, we'll briefly illustrate the physical equations in our
 
 <p>Also,the divergence of velocity should be zero to meet mass conservation. But when explosion or fluid process happens, the divergence in that area would not be zero. To allow such events to happen, we introduce a modified Poisson equation with a new variable Φ:</p>
 
-<p><img src="http://i.imgur.com/tNTF7cV.gif" alt="Poisson"></p>
+<p><img src="http://i.imgur.com/tNTF7cV.gif" alt="Poisson"> &lt;\br&gt;</p>
 
 <p>where Φ is zero everywhere except expanding or inflowing regions. </p>
 
 <p>Another equation describing heat flow is given as:</p>
 
-<p><img src="http://i.imgur.com/KR1jLaB.gif" alt="Heat"></p>
+<p><img src="http://i.imgur.com/KR1jLaB.gif" alt="Heat"> &lt;\br&gt;</p>
 
 <p>From left to right, this formula considers advection, cooling, diffusion and incoming heat. </p>
 
@@ -59,13 +59,13 @@ In the following section, we'll briefly illustrate the physical equations in our
 
 <p>There are two types of particle in our system: fuel and soot. They obeys basic physics formulas: F = ma, H = mSΔT. Forces include gravity as well as the drag force between air and particles:</p>
 
-<p><img src="http://i.imgur.com/mFEjU32.gif" alt="Drag"></p>
+<p><img src="http://i.imgur.com/mFEjU32.gif" alt="Drag"> &lt;\br&gt;</p>
 
 <p>where d is drag coefficient, r is particle radius, u is the interpolated velocity of air, and v is the velocity of particle. While a particle receives a drag force, we also apply the same amount of force with opposite direction to the air cell containing the particle. If a particle is too light, we ignore the drag force and simply set its velocity to air velocity. </p>
 
 <p>Heat transfer between air and particles can be defined as:</p>
 
-<p><img src="http://i.imgur.com/ikqoa4s.gif" alt="Drag"></p>
+<p><img src="http://i.imgur.com/ikqoa4s.gif" alt="Drag"> &lt;\br&gt;</p>
 
 <p>where his heat transfer coefficient, T is the interpolated temperature of air, and Y is the temperature of particle. Still, heat added to a particle shall be subtracted from air cell, and a particle’s temperature can be directly set to air temperature if its thermal mass is too small.</p>
 
@@ -86,9 +86,9 @@ In the following section, we'll briefly illustrate the physical equations in our
 <p>We use a 20x20x20 grid with resolution = 1 (edgelength of cell) to conduct simulation. Boundary cells are required to handle boundary conditions, so there are actually 22x22x22 cells in our system. Each cell have their individual pressure p, velocity v, temperature T and divergence magnitude Φ. We initialize p and Φ to zero, T to ambient temperature, and v to a small random vector to avoid some undesired symmetrical effects.
 After discretization, we begin to solve equations. Our initial solution was derived from [3]. We ignore the pressure term in Navier-Stokes equation and use discrete version of divergence operator to solve du/dt. After that,  we obtain u*, an estimate of u:</p>
 
-<p><img src="http://i.imgur.com/lxZWdw1.gif" alt=""></p>
+<p><img src="http://i.imgur.com/lxZWdw1.gif" alt=""> &lt;\br&gt;</p>
 
-<p><img src="http://i.imgur.com/wrRshKh.gif" alt="">         </p>
+<p><img src="http://i.imgur.com/wrRshKh.gif" alt=""> &lt;\br&gt;         </p>
 
 <p>Then we start to solve pressure Poisson equation based on u*:</p>
 
@@ -97,7 +97,7 @@ After discretization, we begin to solve equations. Our initial solution was deri
 <p>To solve Poisson equation in discrete form, we recommend an excellent tutorial found in [4], which introduces several solving algorithms from Jacobi iterative method to  multigrid method. We use Successive Over Relaxation (SOR), or Gauss-Seidel method, to solve for pressure in our program since it converges faster than Jacobi.
 The last step is to compensate u* with p to get current velocity u. </p>
 
-<p><img src="http://i.imgur.com/Zq4dbOB.gif" alt=""></p>
+<p><img src="http://i.imgur.com/Zq4dbOB.gif" alt=""> &lt;\br&gt;</p>
 
 <p>We took some time to implement this algorithm. However, once we executed it, boom! Program crashed. We printed out velocity fields in .txt files and used matlab to examine the results. It turned out that velocity field soon diverged to infinity after a few frames.</p>
 
