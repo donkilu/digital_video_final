@@ -35,15 +35,15 @@ In the following section, we'll briefly illustrate the physical equations in our
 <a id="gas-model" class="anchor" href="#gas-model" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Gas Model</h2>
 
 <p>The gas model assumes the fluid/gas is incompressible and inviscid, so it obeys momentum and mass conservation. Momentum conservation is enforced by Navier-Stokes equation with zero viscosity:
-<img src="http://i.imgur.com/r6ArT9x.png" alt="Navier-Stokes">
+<img src="http://i.imgur.com/r6ArT9x.gif" alt="Navier-Stokes">
 where u is gas velocity, p is pressure, ρ is gas density, and f is external forces including buoyancy, vorticity and drag forces. The formula of the first two forces can be founds in [3].</p>
 
 <p>Also,the divergence of velocity should be zero to meet mass conservation. But when explosion or fluid process happens, the divergence in that area would not be zero. To allow such events to happen, we introduce a modified Poisson equation with a new variable Φ:
-<img src="http://i.imgur.com/tNTF7cV.png" alt="Poisson">
+<img src="http://i.imgur.com/tNTF7cV.gif" alt="Poisson">
 where Φ is zero everywhere except expanding or inflowing regions. </p>
 
 <p>Another equation describing heat flow is given as:
-<img src="http://i.imgur.com/KR1jLaB.png" alt="Heat">
+<img src="http://i.imgur.com/KR1jLaB.gif" alt="Heat">
 From left to right, this formula considers advection, cooling, diffusion and incoming heat. </p>
 
 <p>Now we have three equations and need to solve the velocity u, pressure p and temperature T for each air cell. Their solver, however, is not as easy as it looks like. We are going to describe the solving process in the Numerical Solver section.</p>
@@ -52,11 +52,11 @@ From left to right, this formula considers advection, cooling, diffusion and inc
 <a id="particulate-model" class="anchor" href="#particulate-model" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Particulate Model</h2>
 
 <p>There are two types of particle in our system: fuel and soot. They obeys basic physics formulas: F = ma, H = mSΔT. Forces include gravity as well as the drag force between air and particles:
-<img src="http://i.imgur.com/mFEjU32.png" alt="Drag">
+<img src="http://i.imgur.com/mFEjU32.gif" alt="Drag">
 where d is drag coefficient, r is particle radius, u is the interpolated velocity of air, and v is the velocity of particle. While a particle receives a drag force, we also apply the same amount of force with opposite direction to the air cell containing the particle. If a particle is too light, we ignore the drag force and simply set its velocity to air velocity. </p>
 
 <p>Heat transfer between air and particles can be defined as:
-<img src="http://i.imgur.com/ikqoa4s.png" alt="Drag">
+<img src="http://i.imgur.com/ikqoa4s.gif" alt="Drag">
 where his heat transfer coefficient, T is the interpolated temperature of air, and Y is the temperature of particle. Still, heat added to a particle shall be subtracted from air cell, and a particle’s temperature can be directly set to air temperature if its thermal mass is too small.</p>
 
 <p>Another feature of particulate model is burning. Once a fuel particle reaches its ignition temperature, it starts to burn. Burning a fuel particle would decrease its mass and thermal mass, but increase heat and phi value of the air cell. Also, mass burnt is accumulated as “soot mass”. If soot mass is larger than a threshold, a soot particle would added to the simulation with the same speed and position as the fuel particle’s.</p>
@@ -70,16 +70,16 @@ where his heat transfer coefficient, T is the interpolated temperature of air, a
 <a id="discretization-and-initial-attempt" class="anchor" href="#discretization-and-initial-attempt" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Discretization and Initial Attempt</h2>
 
 <p>The gas model equations are written in continuous form, and we need to use numerical analysis to solve these equations in discrete manner. First, we discretize the region we want to simulate into small “cells”:
-<img src="http://i.imgur.com/Twv0Sd2.png" alt="Cube">
+<img src="http://i.imgur.com/Twv0Sd2.gif" alt="Cube">
 We use a 20x20x20 grid with resolution = 1 (edgelength of cell) to conduct simulation. Boundary cells are required to handle boundary conditions, so there are actually 22x22x22 cells in our system. Each cell have their individual pressure p, velocity v, temperature T and divergence magnitude Φ. We initialize p and Φ to zero, T to ambient temperature, and v to a small random vector to avoid some undesired symmetrical effects.
 After discretization, we begin to solve equations. Our initial solution was derived from [3]. We ignore the pressure term in Navier-Stokes equation and use discrete version of divergence operator to solve du/dt. After that,  we obtain u<em>, an estimate of u:
-<img src="http://i.imgur.com/lxZWdw1.png" alt="">
-<img src="http://i.imgur.com/wrRshKh.png" alt=""><br>
+<img src="http://i.imgur.com/lxZWdw1.gif" alt="">
+<img src="http://i.imgur.com/wrRshKh.gif" alt=""><br>
 Then we start to solve pressure Poisson equation based on u</em>:
-<img src="http://i.imgur.com/48wq4Rw.png" alt="">
+<img src="http://i.imgur.com/48wq4Rw.gif" alt="">
 To solve Poisson equation in discrete form, we recommend an excellent tutorial found in [4], which introduces several solving algorithms from Jacobi iterative method to  multigrid method. We use Successive Over Relaxation (SOR), or Gauss-Seidel method, to solve for pressure in our program since it converges faster than Jacobi.
 The last step is to compensate u* with p to get current velocity u. 
-<img src="http://i.imgur.com/Zq4dbOB.png" alt="">
+<img src="http://i.imgur.com/Zq4dbOB.gif" alt="">
 We took some time to implement this algorithm. However, once we executed it, boom! Program crashed. We printed out velocity fields in .txt files and used matlab to examine the results. It turned out that velocity field soon diverged to infinity after a few frames.</p>
 
 <p>Our initial algorithm was found unstable. </p>
