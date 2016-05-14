@@ -2,7 +2,7 @@
 <html lang="en-us">
   <head>
     <meta charset="UTF-8">
-    <title>Particle Explosion  by donkilu</title>
+    <title>Ball Tracking in Broadcast Basketball Videos by donkilu</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
     <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
@@ -11,8 +11,8 @@
   </head>
   <body>
     <section class="page-header">
-      <h1 class="project-name">Particle Explosion </h1>
-      <h2 class="project-tagline">Simulation and Rendering of Particle Explosions </h2>
+      <h1 class="project-name">Ball Tracking in Broadcast Basketball Videos</h1>
+      <h2 class="project-tagline"></h2>
       <a href="https://github.com/donkilu/digital_video_final" class="btn">View on GitHub</a>
       <a href="https://github.com/donkilu/digital_video_final/zipball/master" class="btn">Download .zip</a>
       <a href="https://github.com/donkilu/digital_video_final/tarball/master" class="btn">Download .tar.gz</a>
@@ -22,177 +22,13 @@
       <h3>
 <a id="introduction" class="anchor" href="#introduction" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Introduction</h3>
 
-<p>Realistic explosion has been a representative VFX since the dawn of computer graphics industry. It is also a classical demonstration for showing the potential of particle systems. In this project, we aim to present an explosion simulation program. We believe this is the best way to learn particle system animations.
-To simulate a realistic explosion, stable physical models are required to describe the whole process. The models should incorporate fluid dynamics, particulate discretization, solid material interaction, etc. Our model is basically based on [1], which described the simulation of suspended fuel particle explosion. The numerical solver we used are evolved from the works by Stam in [2] and [3].
-In the following section, we'll briefly illustrate the physical equations in our model. Then we focus on the numerical solving process, which is the most important element to build a successful simulator. Finally, following a small section discussing shader, we will present our final results in the end.</p>
-
-<h3>
-<a id="physical-model" class="anchor" href="#physical-model" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Physical Model</h3>
-
-<p>Friedman’s model of particle explosion in [1] can be divided into two sub-models: gas model and particulate model. Gas model simulates the velocity and pressure of air in a 3D cube grid while particulate model simulates the motion and burning of particles. Two sub-models mutually interacts with drag forces and heat transfers.</p>
-
-<h2>
-<a id="gas-model" class="anchor" href="#gas-model" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Gas Model</h2>
-
-<p>The gas model assumes the fluid/gas is incompressible and inviscid, so it obeys momentum and mass conservation. Momentum conservation is enforced by Navier-Stokes equation with zero viscosity:</p>
-
-<p><img src="http://i.imgur.com/r6ArT9x.gif" alt="Navier-Stokes"> &lt;\br&gt;</p>
-
-<p>where u is gas velocity, p is pressure, ρ is gas density, and f is external forces including buoyancy, vorticity and drag forces. The formula of the first two forces can be founds in [3].</p>
-
-<p>Also,the divergence of velocity should be zero to meet mass conservation. But when explosion or fluid process happens, the divergence in that area would not be zero. To allow such events to happen, we introduce a modified Poisson equation with a new variable Φ:</p>
-
-<p><img src="http://i.imgur.com/tNTF7cV.gif" alt="Poisson"> &lt;\br&gt;</p>
-
-<p>where Φ is zero everywhere except expanding or inflowing regions. </p>
-
-<p>Another equation describing heat flow is given as:</p>
-
-<p><img src="http://i.imgur.com/KR1jLaB.gif" alt="Heat"> &lt;\br&gt;</p>
-
-<p>From left to right, this formula considers advection, cooling, diffusion and incoming heat. </p>
-
-<p>Now we have three equations and need to solve the velocity u, pressure p and temperature T for each air cell. Their solver, however, is not as easy as it looks like. We are going to describe the solving process in the Numerical Solver section.</p>
-
-<h2>
-<a id="particulate-model" class="anchor" href="#particulate-model" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Particulate Model</h2>
-
-<p>There are two types of particle in our system: fuel and soot. They obeys basic physics formulas: F = ma, H = mSΔT. Forces include gravity as well as the drag force between air and particles:</p>
-
-<p><img src="http://i.imgur.com/mFEjU32.gif" alt="Drag"> &lt;\br&gt;</p>
-
-<p>where d is drag coefficient, r is particle radius, u is the interpolated velocity of air, and v is the velocity of particle. While a particle receives a drag force, we also apply the same amount of force with opposite direction to the air cell containing the particle. If a particle is too light, we ignore the drag force and simply set its velocity to air velocity. </p>
-
-<p>Heat transfer between air and particles can be defined as:</p>
-
-<p><img src="http://i.imgur.com/ikqoa4s.gif" alt="Drag"> &lt;\br&gt;</p>
-
-<p>where his heat transfer coefficient, T is the interpolated temperature of air, and Y is the temperature of particle. Still, heat added to a particle shall be subtracted from air cell, and a particle’s temperature can be directly set to air temperature if its thermal mass is too small.</p>
-
-<p>Another feature of particulate model is burning. Once a fuel particle reaches its ignition temperature, it starts to burn. Burning a fuel particle would decrease its mass and thermal mass, but increase heat and phi value of the air cell. Also, mass burnt is accumulated as “soot mass”. If soot mass is larger than a threshold, a soot particle would added to the simulation with the same speed and position as the fuel particle’s.</p>
-
-<p>After computing force, temperature and burning of each particle, we simply use Euler method to update their position, speed and temperature.</p>
-
-<h3>
-<a id="numerical-solver" class="anchor" href="#numerical-solver" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Numerical Solver</h3>
-
-<h2>
-<a id="discretization-and-initial-attempt" class="anchor" href="#discretization-and-initial-attempt" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Discretization and Initial Attempt</h2>
-
-<p>The gas model equations are written in continuous form, and we need to use numerical analysis to solve these equations in discrete manner. First, we discretize the region we want to simulate into small “cells”:</p>
-
-<p><img src="http://i.imgur.com/Twv0Sd2.gif" alt="Cube"></p>
-
-<p>We use a 20x20x20 grid with resolution = 1 (edgelength of cell) to conduct simulation. Boundary cells are required to handle boundary conditions, so there are actually 22x22x22 cells in our system. Each cell have their individual pressure p, velocity v, temperature T and divergence magnitude Φ. We initialize p and Φ to zero, T to ambient temperature, and v to a small random vector to avoid some undesired symmetrical effects.
-After discretization, we begin to solve equations. Our initial solution was derived from [3]. We ignore the pressure term in Navier-Stokes equation and use discrete version of divergence operator to solve du/dt. After that,  we obtain u*, an estimate of u:</p>
-
-<p><img src="http://i.imgur.com/lxZWdw1.gif" alt=""> &lt;\br&gt;</p>
-
-<p><img src="http://i.imgur.com/wrRshKh.gif" alt=""> &lt;\br&gt;         </p>
-
-<p>Then we start to solve pressure Poisson equation based on u*:</p>
-
-<p><img src="http://i.imgur.com/48wq4Rw.gif" alt=""></p>
-
-<p>To solve Poisson equation in discrete form, we recommend an excellent tutorial found in [4], which introduces several solving algorithms from Jacobi iterative method to  multigrid method. We use Successive Over Relaxation (SOR), or Gauss-Seidel method, to solve for pressure in our program since it converges faster than Jacobi.
-The last step is to compensate u* with p to get current velocity u. </p>
-
-<p><img src="http://i.imgur.com/Zq4dbOB.gif" alt=""> &lt;\br&gt;</p>
-
-<p>We took some time to implement this algorithm. However, once we executed it, boom! Program crashed. We printed out velocity fields in .txt files and used matlab to examine the results. It turned out that velocity field soon diverged to infinity after a few frames.</p>
-
-<p>Our initial algorithm was found unstable. </p>
-
-<h2>
-<a id="stable-solver-for-gas" class="anchor" href="#stable-solver-for-gas" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Stable Solver for Gas</h2>
-
-<p>The problem comes from the evaluation of u<em>: The Eulerian equation  is not stable. After surveying a few related papers, we found a stable solving algorithm in [2]. It states that Navier-Stokes equation can be solved via three stages: 
-1. Applying force: apply the force term f.
-2. Diffusion: apply the laplacian term. (Only existed in heat equation) 
-3. Advection: apply the dot-gradient term with Semi-Lagrangian method.
-The stable solving method does not compute dudt directly. Instead, it computes a new u</em> at each stage mentioned above, and uses this new u* as input to the next stage to compute a stable u* in the end. Moreover, this algorithm provided some details about boundary conditions. We highly recommend readers without numerical analysis background to read [2] to get an image of stable fluid solver.</p>
-
-<h2>
-<a id="particulate-model-solver" class="anchor" href="#particulate-model-solver" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Particulate Model Solver</h2>
-
-<p>Particulate model is much easier to solve compared to gas model. All equations are either directly computable or can be solved by Eulerian approach. However, the drag force and heat transfer computation described in [1] seems create some pitfalls. In our implementation, we update the gas model first and then update particulate model. If there are too many particles in one single cell, drag force and heat transfer in that cell will become very unstable. The instability comes from a positive feedback process: particles pass too much heat to air, making the air very hot. In the next iteration, hotter air enables particles to receive more heat, making air colder than before. As simulation goes on, the heat transfer between particles and air would oscillate and diverges to infinity!</p>
-
-<p>We haven’t found any good numerical methods to solve this problem. We fall back to the solution as follows: only apply heat transfer and drag force to particles. Particles can receive heat and force from air, but not vice versa. This solution is not satisfying, but it can remove the instability in particulate model solver.</p>
-
-<h2>
-<a id="implementation" class="anchor" href="#implementation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Implementation</h2>
-
-<p>Our system is split into two modules: fluid and particle system. The system diagram below summarizes our simulation system described above.</p>
-
-<p><img src="http://i.imgur.com/BaAc7qV.png" alt=""></p>
-
-<h3>
-<a id="rendering-methods" class="anchor" href="#rendering-methods" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Rendering Methods</h3>
-
-<p>Due to time limitation, the particles are rendered as simple spheres of different length radii (with OpenGL lighting disabled). We make the explosions more realistic looking by changing the color the particles emitted according to their temperatures. As observed in the black-body radiation phenomenon, light emitted by a blackbody is visible when the objects’ temperature ranges from 1000K to 10000K approximately. The wavelength of the light emitted can then converted to RGB values using the CIE luminosity functions. More details on the conversion can be found in [5]. Note that we use the source code provided in [5] to convert our particles’ temperatures directly to RGB values in the rendering stage.</p>
-
-<p>Other fine-tunings for making the explosion look more realistic include better color, particle size transitions with temperature, and alpha blending. Once a particle cools down to below 1000K, the emitted light from black-body radiation falls out of the visible light spectrum and therefore appears black. To provide a more soot-like texture, we set the diffuse color of these particles to dark grey with a tint of reddish brown as it cools down from 1000K. 
-To further make the cloud of soot look more realistic, each soot particles simulated are rendered as many small particles as if it had broken down through the burning process. The number and the size of particles rendered for each soot particle increases and decreases, respectively, as the temperature cools down. Finally, soot particles are rendered with more transparency so the bright burning particles can be still visible through the cloud of soot. We developed this soot rendering trick from multiple attempts, and the result is proven to be effective.</p>
-
-<h3>
-<a id="results" class="anchor" href="#results" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Results</h3>
-
-<p>With the particle system we developed using the simulation and rendering methods described above, we model two types of explosions where 1) fuel particles burn out completely in one time step, and 2) fuel particles explode and continue to burn for a few time steps. We ignite the fuel particles by setting the initial temperature of the fluid cell containing the fuel particles significantly higher than ignition threshold, and allow fuel particles to heat up during the first couple of time steps. Table below shows our final configuration of the constant variables for the two simulations. We first reference the values provided in [1] then adjust them to best fit our simulations. Note that the only differences between the two simulations are the initial number of fuel particles and the initial mass of the fuel particles, which are 15000, 0.2 and 5000, 1.0, respectively for simulation for 1) and 2). The ignition threshold is set to be 323.</p>
-
-<p>// Tables need to re-saved as png</p>
-
-<p>Series of pictures below shows the two explosion effects 1) and 2) respectively as time advances:</p>
-
-<p>// Pictures</p>
-
-<p>From the colors of the particles in both simulations, one can see that the particles heat up and emit strong white and blue lights in the first frame, slowly cools down to orange and red, and finally turns brownish grey when cooled down completely. The magnitude of explosion 2) seems bigger since there is more fuel masses to burn, and the mushroom cloud effect created from the fluid dynamic simulation is more apparent. To see the effects of fluid dynamics more clearly, we changed the color of the cooled down particles to white as shown in pictures below:</p>
-
-<p>// Pictures</p>
-
-<p>Since the soot particles are light enough to not be affected by the drag forces and they simply follow the fluid velocity, the pictures above shows the effects created by fluid dynamic simulations. The swirling effects may come from the vorticity force.</p>
-
-<p>Our program is based on the animator project from this class. We did not do much optimization due to time consideration, and it takes about 4 seconds to render a frame on a personal laptop without independent GPU. Render a 20-second video takes around 40 minutes.</p>
-
-<p>Below are links to explosion videos created with our simulator:</p>
-
-<p><a href="https://www.youtube.com/watch?v=zkuowY_j1_o">Light Explosion</a></p>
-
-<p><a href="https://www.youtube.com/watch?v=wwK7TGFIc6U">Heavy Explosion</a></p>
-
-<h3>
-<a id="conclusion" class="anchor" href="#conclusion" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Conclusion</h3>
-
-<p>We have developed an explosion simulator that can successfully create the mushroom cloud and swirling effects through fluid and particulate models described in [1]. With physical model simulation and black-body radiation rendering, our explosion simulation results are extraordinary. More advanced rendering techniques can be applied to our simulation to produce even more convincing explosion videos. The soot flow may look a little “stream-like”, and we believe that increasing fluid simulation resolution (more grid cells) may solve the issue. However, if we want to increase the number of grid cells, the simulation time would also increase magnificantly. Some optimizations and interesting future works we came up with are listed below:</p>
-
-<ul>
-<li>Parallelization when computing cells and particles (Vector register, threading)</li>
-<li>Locality refinement (use struct or continuous array instead of class)</li>
-<li>Interaction with objects in scene (Pressure boundary condition, collision detection)</li>
-<li>More realistic rendering (Texture mapping, more irregular particle shapes rather than spheres, enable shading with light sources etc.)</li>
-</ul>
-
-<p>Building a realistic explosion simulation is a time-consuming process and it needs careful analysis to avoid numerical methods from diverging. However, it definitely pays off when we start exploding and visualize cool explosion effects using our program. </p>
-
-<h3>
-<a id="references" class="anchor" href="#references" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>References</h3>
-
-<p>[1] Bryan E. Feldman, James F. O'Brien, and Okan Arikan. 2003. Animating suspended particle explosions. ACM Trans. Graph. 22, 3 (July 2003), 708-715.</p>
-
-<p>[2] Jos Stam, "Real-Time Fluid Dynamics for Games". Proceedings of the Game Developer Conference, March 2003.</p>
-
-<p>[3] Ronald Fedkiw, Jos Stam, and Henrik Wann Jensen. 2001. Visual simulation of smoke. In Proceedings of the 28th annual conference on Computer graphics and interactive techniques (SIGGRAPH '01). ACM, New York, NY, USA, 15-22. </p>
-
-<p>[4] "3.1 Poisson's Equation and Relaxation Methods", Physics.buffalo.edu, 2016. [Online]. Available: <a href="http://www.physics.buffalo.edu/phy410-505/2011/topic3/app1/index.html">http://www.physics.buffalo.edu/phy410-505/2011/topic3/app1/index.html</a>. [Accessed: 13- May- 2016].</p>
-
-<p>[5]  J. Walker, "Colour Rendering of Spectra", Fourmilab.ch, 2016. [Online]. Available: <a href="http://www.fourmilab.ch/documents/specrend/">http://www.fourmilab.ch/documents/specrend/</a>. [Accessed: 13- May- 2016].</p>
-
 <h3>
 <a id="authors" class="anchor" href="#authors" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Authors</h3>
 
-<p>2016 Yi-Hsi Lu (<a href="https://github.com/donkilu" class="user-mention">@donkilu</a>), Jenny Chen (<a href="https://github.com/jenny350026" class="user-mention">@jenny350026</a>)</p>
+<p>2016 Yi-Hsi Lu (<a href="https://github.com/donkilu" class="user-mention">@donkilu</a>), Ike Huang (<a href="https://github.com/YiHaoHuang" class="user-mention">@YiHaoHuang</a>)</p>
 
       <footer class="site-footer">
-        <span class="site-footer-owner"><a href="https://github.com/donkilu/digital_video_final">Particle Explosion </a> is maintained by <a href="https://github.com/donkilu">donkilu</a>.</span>
+        <span class="site-footer-owner"><a href="https://github.com/donkilu/digital_video_final">Ball Tracking in Broadcast Basketball Videos</a> is maintained by <a href="https://github.com/donkilu">donkilu</a>.</span>
 
         <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
       </footer>
